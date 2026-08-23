@@ -1,7 +1,7 @@
 import 'dart:typed_data' show Float64List;
 
-import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/widgets.dart';
 import 'package:inspire_blur/src/utils/layout/inspire_layout_extensions.dart';
 
 /// A centralized bounds observer that tracks a widget's exact global [Rect]
@@ -115,12 +115,12 @@ class _InspireBoundsObserverState extends State<InspireBoundsObserver> {
 }
 
 class _PaintMatrixInterceptor extends SingleChildRenderObjectWidget {
-  final VoidCallback onMatrixChanged;
-
   const _PaintMatrixInterceptor({
     required this.onMatrixChanged,
     required super.child,
   });
+
+  final VoidCallback onMatrixChanged;
 
   @override
   _RenderPaintMatrixInterceptor createRenderObject(BuildContext context) =>
@@ -136,13 +136,13 @@ class _PaintMatrixInterceptor extends SingleChildRenderObjectWidget {
 }
 
 class _RenderPaintMatrixInterceptor extends RenderProxyBox {
-  VoidCallback onMatrixChanged;
-  Float64List? _lastTransform;
-
   _RenderPaintMatrixInterceptor({
     required this.onMatrixChanged,
     RenderBox? child,
   }) : super(child);
+
+  VoidCallback onMatrixChanged;
+  Float64List? _lastTransform;
 
   @override
   void paint(PaintingContext context, Offset offset) {

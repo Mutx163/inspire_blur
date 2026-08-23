@@ -1,76 +1,76 @@
 import 'dart:math';
 
-import 'package:inspire_blur/src/distribution/maps/gradient_distribution_map.dart';
+import 'package:inspire_blur/src/distribution/maps/progressing_distribution_map.dart';
 
-class RRectDistributionMap extends GradientDistributionMap {
+class RRectDistributionMap extends ProgressingDistributionMap {
+  RRectDistributionMap({
+    required super.width,
+    required super.height,
+    required this.horizontalInset,
+    required this.verticalInset,
+    required this.cornerRadius,
+    required super.progression,
+    required super.strengthFactor,
+  }) {
+    _left = horizontalInset;
+    _right = 1.0 - horizontalInset;
+    _top = verticalInset;
+    _bottom = 1.0 - verticalInset;
+
+    _centerX = (_left + _right) * 0.5;
+    _centerY = (_top + _bottom) * 0.5;
+
+    _halfWidth = (_right - _left) * 0.5;
+    _halfHeight = (_bottom - _top) * 0.5;
+
+    _effectiveRadius = cornerRadius * min(_halfWidth, _halfHeight);
+
+    _centerDistance = _signedDistanceToRRect(
+      x: 0.0,
+      y: 0.0,
+      halfWidth: _halfWidth,
+      halfHeight: _halfHeight,
+      radius: _effectiveRadius,
+    ).abs();
+  }
+
   final double horizontalInset;
   final double verticalInset;
   final double cornerRadius;
 
-  late final double left;
-  late final double right;
-  late final double top;
-  late final double bottom;
+  late final double _left;
+  late final double _right;
+  late final double _top;
+  late final double _bottom;
 
-  late final double centerX;
-  late final double centerY;
+  late final double _centerX;
+  late final double _centerY;
 
-  late final double halfWidth;
-  late final double halfHeight;
+  late final double _halfWidth;
+  late final double _halfHeight;
 
-  late final double effectiveRadius;
+  late final double _effectiveRadius;
 
-  late final double centerDistance;
-
-  RRectDistributionMap({
-    required super.width,
-    required super.height,
-    required super.values,
-    required super.stops,
-    required this.horizontalInset,
-    required this.verticalInset,
-    required this.cornerRadius,
-  }) {
-    left = horizontalInset;
-    right = 1.0 - horizontalInset;
-    top = verticalInset;
-    bottom = 1.0 - verticalInset;
-
-    centerX = (left + right) * 0.5;
-    centerY = (top + bottom) * 0.5;
-
-    halfWidth = (right - left) * 0.5;
-    halfHeight = (bottom - top) * 0.5;
-
-    effectiveRadius = cornerRadius * min(halfWidth, halfHeight);
-
-    centerDistance = _signedDistanceToRRect(
-      x: 0.0,
-      y: 0.0,
-      halfWidth: halfWidth,
-      halfHeight: halfHeight,
-      radius: effectiveRadius,
-    ).abs();
-  }
+  late final double _centerDistance;
 
   @override
   double intensityAt(double u, double v) {
-    if (halfWidth <= 0.0 || halfHeight <= 0.0) {
+    if (_halfWidth <= 0.0 || _halfHeight <= 0.0) {
       return 0.0;
     }
 
     final signedDistance = _signedDistanceToRRect(
-      x: u - centerX,
-      y: v - centerY,
-      halfWidth: halfWidth,
-      halfHeight: halfHeight,
-      radius: effectiveRadius,
+      x: u - _centerX,
+      y: v - _centerY,
+      halfWidth: _halfWidth,
+      halfHeight: _halfHeight,
+      radius: _effectiveRadius,
     );
 
     final position =
-        centerDistance == 0.0 ? 1.0 : 1.0 + signedDistance / centerDistance;
+        _centerDistance == 0.0 ? 1.0 : 1.0 + signedDistance / _centerDistance;
 
-    return sampleGradient(position);
+    return sampleProgression(position);
   }
 
   static double _signedDistanceToRRect({

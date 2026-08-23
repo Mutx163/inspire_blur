@@ -1,17 +1,20 @@
-import 'dart:ui' as ui;
-
 import 'package:flutter/widgets.dart';
-import 'package:inspire_blur/src/distribution/blur_distribution_image.dart';
-import 'package:inspire_blur/src/distribution/blur_distribution_map.dart';
+import 'package:inspire_blur/src/distribution/distribution_image.dart';
+import 'package:inspire_blur/src/distribution/distribution_map_holder.dart';
 import 'package:inspire_blur/src/inspire_blur_config.dart';
+import 'package:inspire_blur/src/model/inspire_blur_widget_type.dart';
 import 'package:inspire_blur/src/utils/layout/inspire_bounds_observer.dart';
 
+enum DistributionMapType { blur, opacity }
+
 class InspireBlurWrapperData {
-  final ui.Image? blurGradientMap;
+  final DistributionImage? blurDistributionImage;
+  final DistributionImage? opacityDistributionImage;
   final Rect? globalBounds;
 
   const InspireBlurWrapperData({
-    required this.blurGradientMap,
+    required this.blurDistributionImage,
+    required this.opacityDistributionImage,
     required this.globalBounds,
   });
 
@@ -20,16 +23,22 @@ class InspireBlurWrapperData {
     if (identical(this, other)) return true;
 
     return other is InspireBlurWrapperData &&
-        other.blurGradientMap == blurGradientMap &&
+        other.blurDistributionImage == blurDistributionImage &&
+        other.opacityDistributionImage == opacityDistributionImage &&
         other.globalBounds == globalBounds;
   }
 
   @override
-  int get hashCode => Object.hash(blurGradientMap, globalBounds);
+  int get hashCode => Object.hash(
+        blurDistributionImage,
+        opacityDistributionImage,
+        globalBounds,
+      );
 
   @override
   String toString() => 'InspireBlurWrapperData('
-      'blurGradientMap: $blurGradientMap, '
+      'blurDistributionImage: $blurDistributionImage, '
+      'opacityDistributionImage: $opacityDistributionImage, '
       'globalBounds: $globalBounds'
       ')';
 }
@@ -39,12 +48,14 @@ typedef InspireBlurWrapperBuilder = Widget Function(
 
 class InspireBlurWrapper extends StatefulWidget {
   final InspireBlurConfig config;
+  final InspireBlurWidgetType widgetType;
   final InspireBlurWrapperBuilder builder;
   final Object? layoutInvalidationKey;
 
   const InspireBlurWrapper({
     super.key,
     required this.config,
+    required this.widgetType,
     required this.builder,
     required this.layoutInvalidationKey,
   });
@@ -54,50 +65,66 @@ class InspireBlurWrapper extends StatefulWidget {
 }
 
 class _InspireBlurWrapperState extends State<InspireBlurWrapper> {
-  late double _screenLongestSide;
-  bool _hasScreenSize = false;
+  final _distributionMapHolders =
+      <DistributionMapType, DistributionMapHolder>{};
 
-  BlurDistributionImage? _blurDistributionImage;
-  int _blurGradientMapGeneration = 0;
-  int? _blurGradientMapLastSize;
+  @override
+  void initState() {
+    super.initState();
 
-  bool _disposed = false;
+    _distributionMapHolders.putIfAbsent(
+      DistributionMapType.blur,
+      () => DistributionMapHolder(),
+    );
+
+    if (widget.widgetType == InspireBlurWidgetType.child) {
+      _distributionMapHolders.putIfAbsent(
+        DistributionMapType.opacity,
+        () => DistributionMapHolder(),
+      );
+    }
+  }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
 
-    final newSize = MediaQuery.of(context).size.longestSide;
+    _distributionMapHolders[DistributionMapType.blur]?.didChangeDependencies(
+      context: context,
+      distribution: widget.config.blurDistribution,
+    );
 
-    if (!_hasScreenSize || newSize != _screenLongestSide) {
-      _screenLongestSide = newSize;
-      _hasScreenSize = true;
-      _regenerateBlurGradientMapIfNeeded();
-    }
+    _distributionMapHolders[DistributionMapType.opacity]?.didChangeDependencies(
+      context: context,
+      distribution: widget.config.widgetOpacity.distribution,
+    );
   }
 
   @override
   void didUpdateWidget(covariant InspireBlurWrapper oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    if (oldWidget.config.distribution != widget.config.distribution) {
-      _regenerateBlurGradientMapIfNeeded(force: true);
+    if (oldWidget.config.blurDistribution != widget.config.blurDistribution) {
+      _distributionMapHolders[DistributionMapType.blur]?.regenerateIfNeeded(
+        distribution: widget.config.blurDistribution,
+        invalidate: true,
+      );
     }
-  }
 
-  void _regenerateBlurGradientMapIfNeeded({bool force = false}) {
-    final newSize = _getBlurGradientMaskSize();
-
-    if (force || _blurGradientMapLastSize != newSize) {
-      _blurGradientMapLastSize = newSize;
-      _createNewBlurGradientMap(newSize);
+    if (oldWidget.config.widgetOpacity.distribution !=
+        widget.config.widgetOpacity.distribution) {
+      _distributionMapHolders[DistributionMapType.opacity]?.regenerateIfNeeded(
+        distribution: widget.config.widgetOpacity.distribution,
+        invalidate: true,
+      );
     }
   }
 
   @override
   void dispose() {
-    _disposed = true;
-    _blurDistributionImage?.dispose();
+    for (final holder in _distributionMapHolders.values) {
+      holder.dispose();
+    }
     super.dispose();
   }
 
@@ -107,41 +134,27 @@ class _InspireBlurWrapperState extends State<InspireBlurWrapper> {
       layoutInvalidationKey: widget.layoutInvalidationKey,
       builder: (context, boundsNotifier) => ValueListenableBuilder(
         valueListenable: boundsNotifier,
-        builder: (context, globalBounds, child) => widget.builder(
-          context,
-          InspireBlurWrapperData(
-            blurGradientMap: _blurDistributionImage?.image,
-            globalBounds: globalBounds,
+        builder: (context, globalBounds, child) => ListenableBuilder(
+          listenable: Listenable.merge(
+            _distributionMapHolders.values
+                .map(((holder) => holder.distributionImage)),
+          ),
+          builder: (context, child) => widget.builder(
+            context,
+            InspireBlurWrapperData(
+              blurDistributionImage:
+                  _distributionMapHolders[DistributionMapType.blur]
+                      ?.distributionImage
+                      .value,
+              opacityDistributionImage:
+                  _distributionMapHolders[DistributionMapType.opacity]
+                      ?.distributionImage
+                      .value,
+              globalBounds: globalBounds,
+            ),
           ),
         ),
       ),
     );
   }
-
-  Future<void> _createNewBlurGradientMap(int size) async {
-    final gen = ++_blurGradientMapGeneration;
-
-    final distributionMap = widget.config.distribution.toDistributionMap(
-      size: size,
-    );
-
-    final newBlurDistributionImage =
-        await distributionMap.getBlurDistributionImage();
-
-    if (_disposed || gen != _blurGradientMapGeneration) {
-      newBlurDistributionImage.dispose();
-      return;
-    }
-
-    _blurDistributionImage?.dispose();
-
-    if (mounted) {
-      setState(() => _blurDistributionImage = newBlurDistributionImage);
-    } else {
-      _blurDistributionImage = newBlurDistributionImage;
-    }
-  }
-
-  int _getBlurGradientMaskSize() =>
-      (_screenLongestSide * 0.75).round().clamp(256, 1024);
 }

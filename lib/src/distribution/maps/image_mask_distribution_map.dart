@@ -1,9 +1,9 @@
 import 'dart:ui' as ui show Image;
 
-import 'package:inspire_blur/src/distribution/blur_distribution_image.dart';
-import 'package:inspire_blur/src/distribution/blur_distribution_map.dart';
+import 'package:inspire_blur/src/distribution/distribution_image.dart';
+import 'package:inspire_blur/src/distribution/distribution_map.dart';
 
-class ImageMaskDistributionMap extends BlurDistributionMap {
+class ImageMaskDistributionMap extends DistributionMap {
   final ui.Image maskImage;
 
   ImageMaskDistributionMap({
@@ -13,6 +13,6 @@ class ImageMaskDistributionMap extends BlurDistributionMap {
   });
 
   @override
-  Future<BlurDistributionImage> getBlurDistributionImage() async =>
-      BlurDistributionImage.borrowed(maskImage);
+  Future<DistributionImage> getDistributionImage() async =>
+      DistributionImage.borrowed(maskImage);
 }

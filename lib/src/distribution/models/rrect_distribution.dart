@@ -1,22 +1,39 @@
-part of 'package:inspire_blur/src/distribution/blur_distribution.dart';
+part of 'package:inspire_blur/src/distribution/distribution.dart';
 
-/// A rounded rectangle blur distribution.
+/// A distribution with a shape of a rounded rectangle.
 ///
-/// Blur intensity across the area is controlled by the gradient
-/// progression control points defined by [values] and [stops].
-final class RRectDistribution extends GradientDistribution {
+/// Intensity from the center of the area toward its edges is controlled
+/// by the [progression].
+final class RRectDistribution extends ProgressingDistribution
+    with FittableDistribution {
+  /// Creates a rounded-rectangular distribution.
+  ///
+  /// The intensity is distributed from the center towards the edge of the
+  /// rounded rectangle according to [progression].
+  const RRectDistribution({
+    this.horizontalInset = 0.0,
+    this.verticalInset = 0.0,
+    this.cornerRadius = 0.0,
+    this.distributionFit = DistributionFit.fill,
+    super.progression = const Progression.gradient(start: 0.5),
+    super.strengthFactor,
+  }) : assert(
+          cornerRadius >= 0.0 && cornerRadius <= 1.0,
+          'cornerRadius must be in the range [0.0, 1.0]',
+        );
+
   /// The normalized distance from the left and right edges to the start
-  /// of the blur region.
+  /// of the progression.
   ///
   /// Normalized to the range `[0.0, 0.5)`. Values greater than or equal
-  /// to `0.5` will collapse the blur area.
+  /// to `0.5` will collapse the distribution area.
   final double horizontalInset;
 
   /// The normalized distance from the top and bottom edges to the start
-  /// of the blur region.
+  /// of the progression.
   ///
   /// Normalized to the range `[0.0, 0.5)`. Values greater than or equal
-  /// to `0.5` will collapse the blur area.
+  /// to `0.5` will collapse the distribution area.
   final double verticalInset;
 
   /// The normalized corner radius of the shape.
@@ -27,20 +44,9 @@ final class RRectDistribution extends GradientDistribution {
   /// maximum corner rounding for the given shape.
   final double cornerRadius;
 
-  /// Creates a rounded-rectangular blur distribution.
-  ///
-  /// The blur intensity is distributed according to the gradient
-  /// defined by [values], and [stops].
-  RRectDistribution({
-    required super.values,
-    required super.stops,
-    required this.horizontalInset,
-    required this.verticalInset,
-    required this.cornerRadius,
-  }) : assert(
-          cornerRadius >= 0.0 && cornerRadius <= 1.0,
-          'cornerRadius must be in the range [0.0, 1.0]',
-        );
+  /// Specifies how the distribution is fit inside the widget.
+  @override
+  final DistributionFit distributionFit;
 
   /// Returns a copy of this distribution with the provided properties updated.
   ///
@@ -50,36 +56,37 @@ final class RRectDistribution extends GradientDistribution {
     double? horizontalInset,
     double? verticalInset,
     double? cornerRadius,
-    List<double>? values,
-    List<double>? stops,
+    DistributionFit? distributionFit,
+    Progression? progression,
+    double? strengthFactor,
   }) {
     return RRectDistribution(
       horizontalInset: horizontalInset ?? this.horizontalInset,
       verticalInset: verticalInset ?? this.verticalInset,
       cornerRadius: cornerRadius ?? this.cornerRadius,
-      values: values ?? this.values,
-      stops: stops ?? this.stops,
+      distributionFit: distributionFit ?? this.distributionFit,
+      progression: progression ?? this.progression,
+      strengthFactor: strengthFactor ?? this.strengthFactor,
     );
   }
 
   /// Linearly interpolates between two [RRectDistribution] objects.
   ///
   /// Enables seamless transitions inside implicit animations or tweens.
-  static RRectDistribution? lerp(
-    RRectDistribution? a,
-    RRectDistribution? b,
+  static RRectDistribution lerp(
+    RRectDistribution a,
+    RRectDistribution b,
     double t,
   ) {
     if (identical(a, b)) return a;
-    if (a == null) return b;
-    if (b == null) return a;
 
     return RRectDistribution(
       horizontalInset: lerpDouble(a.horizontalInset, b.horizontalInset, t)!,
       verticalInset: lerpDouble(a.verticalInset, b.verticalInset, t)!,
       cornerRadius: lerpDouble(a.cornerRadius, b.cornerRadius, t)!,
-      values: lerpDoubleList(a.values, b.values, t),
-      stops: lerpDoubleList(a.stops, b.stops, t),
+      distributionFit: t < 0.5 ? a.distributionFit : b.distributionFit,
+      progression: Progression.lerp(a.progression, b.progression, t),
+      strengthFactor: lerpDouble(a.strengthFactor, b.strengthFactor, t)!,
     );
   }
 
@@ -91,7 +98,9 @@ final class RRectDistribution extends GradientDistribution {
         other.horizontalInset == horizontalInset &&
         other.verticalInset == verticalInset &&
         other.cornerRadius == cornerRadius &&
-        gradientDistributionEquals(other);
+        other.distributionFit == distributionFit &&
+        progressingDistributionEquals(other) &&
+        other.strengthFactor == strengthFactor;
   }
 
   @override
@@ -99,7 +108,9 @@ final class RRectDistribution extends GradientDistribution {
         horizontalInset,
         verticalInset,
         cornerRadius,
-        gradientDistributionHashCode(),
+        distributionFit,
+        progressingDistributionHashCode(),
+        strengthFactor,
       );
 
   @override
@@ -107,7 +118,8 @@ final class RRectDistribution extends GradientDistribution {
       'horizontalInset: $horizontalInset, '
       'verticalInset: $verticalInset, '
       'cornerRadius: $cornerRadius, '
-      'values: [List of ${values.length} items], '
-      'stops: [List of ${stops.length} items]'
+      'distributionFit: $distributionFit, '
+      'progression: $progression, '
+      'strengthFactor: $strengthFactor'
       ')';
 }

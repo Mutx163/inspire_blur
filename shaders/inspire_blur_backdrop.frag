@@ -16,11 +16,14 @@ out vec4 frag_color;
 uniform vec2 u_size;
 uniform sampler2D u_texture;
 
-// Gradient map where Red channel controls [0-1] blur strength factor at given pixel.
-// Where: 0 — no blur, 1 — full blur.
+// Blur intensity map.
+//
+// The red channel controls [0.0-1.0] blur strength, where:
+// - `0.0` produces no blur
+// - `1.0` produces full blur
 uniform sampler2D u_blur_texture;
 
-// Blur sigma.
+// Blur sigma
 uniform float u_blur_sigma;
 
 // An already normalized (0,1) or (1,0) direction vector.
@@ -45,6 +48,8 @@ uniform float u_saturation;
 uniform float u_vibrance;
 uniform float u_color_adjustment_blur_strength;
 uniform float u_color_adjustment_non_blur_strength;
+
+uniform float u_aspect_ratio_correction;
 
 vec2 transformUv(vec2 uv) {
   // Move to origin
@@ -157,6 +162,23 @@ vec4 applyColorAdjustments(vec4 color, float blurFactor) {
   return mix(original, color, adjustmentBlend);
 }
 
+vec2 applyAspectRatioCorrection(vec2 uv) {
+  if (u_aspect_ratio_correction > 0.0 &&
+      u_aspect_ratio_correction < 1.0) {
+    return vec2(
+      uv.x,
+      0.5 + (uv.y - 0.5) / u_aspect_ratio_correction
+    );
+  } else if (u_aspect_ratio_correction > 1.0) {
+    return vec2(
+      0.5 + (uv.x - 0.5) * u_aspect_ratio_correction,
+      uv.y
+    );
+  }
+
+  return uv;
+}
+
 void main() {
   vec2 xy = FlutterFragCoord().xy;
   vec2 uv = xy / u_size;
@@ -186,6 +208,7 @@ void main() {
   areaUV.y = 1.0 - areaUV.y;
 #endif
 
+  areaUV = applyAspectRatioCorrection(areaUV);
   areaUV = transformUv(areaUV);
 
   vec4 bg = texture(u_texture, uv);

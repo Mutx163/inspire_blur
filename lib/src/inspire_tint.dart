@@ -1,38 +1,36 @@
 import 'package:flutter/widgets.dart';
-import 'package:inspire_blur/src/utils/inspire_stops_generator.dart';
+import 'package:inspire_blur/src/model/progression/progression.dart';
 
 class InspireTint extends StatelessWidget {
+  final Color color;
+  final double opacity;
+  final Alignment begin;
+  final Alignment end;
+  final Progression progression;
+  final int stopsCount;
+  final Widget? child;
+
   const InspireTint({
     super.key,
     required this.color,
     required this.opacity,
-    required this.extent,
     required this.begin,
     required this.end,
-    required this.curve,
+    required this.progression,
     required this.child,
     this.stopsCount = 16,
-  });
-
-  final Color color;
-  final double opacity;
-  final double extent;
-  final Alignment begin;
-  final Alignment end;
-  final Curve curve;
-  final int stopsCount;
-  final Widget? child;
+  }) : assert(stopsCount >= 2, 'stopsCount must be greater than or equal to 2');
 
   @override
   Widget build(BuildContext context) {
-    if (extent <= 0.0 || opacity <= 0.0) {
-      return child ?? const SizedBox.shrink();
-    }
+    if (opacity <= 0.0) return child ?? const SizedBox.shrink();
 
-    final opacityControlPoints = curveToValuesAndStops(
-      endStop: extent,
-      curve: curve,
-      stopsCount: stopsCount,
+    final opacityControlPoints = List.generate(
+      stopsCount,
+      (i) {
+        final stop = i / (stopsCount - 1);
+        return (progression.samplePoint(stop), stop);
+      },
     );
 
     return DecoratedBox(

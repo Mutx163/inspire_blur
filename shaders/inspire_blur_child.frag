@@ -11,13 +11,21 @@
 // Minimum weight used to avoid division by zero during normalization.
 #define MIN_WEIGHT 1.0e-5
 
+#define OPACITY_TYPE_SOLID 0
+#define OPACITY_TYPE_SEMI_OPAQUE 1
+#define OPACITY_TYPE_MATCH_BLUR 2
+#define OPACITY_TYPE_CUSTOM 3
+
 out vec4 frag_color;
 
 uniform vec2 u_size;
 uniform sampler2D u_texture;
 
-// Gradient map where Red channel controls [0-1] blur strength factor at given pixel.
-// Where: 0 — no blur, 1 — full blur.
+// Blur intensity map.
+//
+// The red channel controls [0.0-1.0] blur strength, where:
+// - `0.0` produces no blur
+// - `1.0` produces full blur
 uniform sampler2D u_blur_texture;
 
 // Blur sigma.
@@ -31,10 +39,10 @@ uniform vec2 u_delta_left_top;
 uniform vec2 u_delta_right_bottom;
 
 // --- Transformation ---
-uniform vec2 u_transform_scale;
-uniform vec2 u_transform_offset;
+uniform vec2  u_transform_scale;
+uniform vec2  u_transform_offset;
 uniform float u_transform_rotation;
-uniform vec2 u_transform_origin;
+uniform vec2  u_transform_origin;
 uniform float u_transform_inversion;
 
 // --- Color adjustment ---
@@ -45,6 +53,13 @@ uniform float u_saturation;
 uniform float u_vibrance;
 uniform float u_color_adjustment_blur_strength;
 uniform float u_color_adjustment_non_blur_strength;
+
+// --- Opacity ---
+uniform float     u_opacity_type;
+uniform float     u_opacity_value;
+uniform sampler2D u_opacity_texture;
+
+uniform float u_aspect_ratio_correction;
 
 vec2 transformUv(vec2 uv) {
   // Move to origin
@@ -81,9 +96,11 @@ vec3 applyPositiveContrastCurve(vec3 x, float k) {
 }
 
 vec3 applyNegativeContrastCurve(vec3 x, float p) {
-  // Add 0.01 to cut the lower and upper histogram slightly to prevent artifacts.
-  vec3 lower = 0.5 * pow(2.0 * (x + 0.01), vec3(p));
-  vec3 upper = 1.0 - 0.5 * pow(2.0 * (1.01 - x), vec3(p));
+  float strength = clamp(1.0 - p, 0.0, 1.0);
+  float inset = 0.01 * strength;
+
+  vec3 lower = 0.5 * pow(2.0 * (x + inset), vec3(p));
+  vec3 upper = 1.0 - 0.5 * pow(2.0 * (1.0 + inset - x), vec3(p));
 
   return mix(lower, upper, step(vec3(0.5), x));
 }
@@ -157,10 +174,47 @@ vec4 applyColorAdjustments(vec4 color, float blurFactor) {
   return mix(original, color, adjustmentBlend);
 }
 
+vec4 applyOpacity(vec4 color, float blurFactor, vec2 uv) {
+  float opacity;
+  switch (int(u_opacity_type)) {
+    case OPACITY_TYPE_SOLID:
+      opacity = 1.0;
+      break;
+    case OPACITY_TYPE_SEMI_OPAQUE:
+      opacity = u_opacity_value;
+      break;
+    case OPACITY_TYPE_MATCH_BLUR:
+      opacity = 1.0 - blurFactor;
+      break;
+    case OPACITY_TYPE_CUSTOM:
+      opacity = texture(u_opacity_texture, uv).r;
+  }
+  return color * opacity;
+}
+
+vec2 applyAspectRatioCorrection(vec2 uv) {
+  if (u_aspect_ratio_correction > 0.0 &&
+      u_aspect_ratio_correction < 1.0) {
+    return vec2(
+      uv.x,
+      0.5 + (uv.y - 0.5) / u_aspect_ratio_correction
+    );
+  } else if (u_aspect_ratio_correction > 1.0) {
+    return vec2(
+      0.5 + (uv.x - 0.5) * u_aspect_ratio_correction,
+      uv.y
+    );
+  }
+
+  return uv;
+}
+
 void main() {
   vec2 xy = FlutterFragCoord().xy;
   vec2 uv = xy / u_size;
   vec2 uv_blur = (xy + u_delta_left_top) / (u_size + u_delta_left_top + u_delta_right_bottom);
+
+  uv_blur = applyAspectRatioCorrection(uv_blur);
   uv_blur = transformUv(uv_blur);
 
   vec2 texel = 1.0 / u_size;
@@ -189,6 +243,7 @@ void main() {
     } else {
       frag_color = bg;
     }
+    frag_color = applyOpacity(frag_color, blurFactor, uv_blur);
     return;
   }
 
@@ -250,4 +305,6 @@ void main() {
   ) {
     frag_color = applyColorAdjustments(frag_color, blurFactor);
   }
+
+  frag_color = applyOpacity(frag_color, blurFactor, uv_blur);
 }

@@ -3,24 +3,34 @@ import 'dart:ui' as ui;
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 import 'package:inspire_blur/src/color_adjustment/blur_color_adjustment.dart';
+import 'package:inspire_blur/src/distribution/distribution_image.dart';
 import 'package:inspire_blur/src/inspire_shaders.dart';
+import 'package:inspire_blur/src/model/aspect_ratio_correction.dart';
+import 'package:inspire_blur/src/opacity/widget_opacity.dart';
 import 'package:inspire_blur/src/transform/blur_transform.dart';
 import 'package:inspire_blur/src/utils/extensions/inspire_double_extensions.dart';
 import 'package:inspire_blur/src/utils/extensions/inspire_geometry_extensions.dart';
+import 'package:inspire_blur/src/utils/inspire_shader_utils.dart';
 
 class InspireChildBlurImageFilterPass extends StatefulWidget {
-  final ui.Image gradientMap;
+  final DistributionImage blurDistributionImage;
+  final DistributionImage opacityDistributionImage;
   final BlurTransform transform;
+  final WidgetOpacity widgetOpacity;
   final BlurColorAdjustment colorAdjustment;
+  final AspectRatioCorrection aspectRatioCorrection;
   final Axis direction;
   final double sigma;
   final Widget child;
 
   const InspireChildBlurImageFilterPass({
     super.key,
-    required this.gradientMap,
+    required this.blurDistributionImage,
+    required this.opacityDistributionImage,
     required this.transform,
+    required this.widgetOpacity,
     required this.colorAdjustment,
+    required this.aspectRatioCorrection,
     required this.direction,
     required this.sigma,
     required this.child,
@@ -45,9 +55,7 @@ class _InspireChildBlurImageFilterPassState
     InspireShaders.childBlur.then((program) {
       final shader = program?.fragmentShader();
       if (mounted) {
-        setState(() {
-          _shader = shader;
-        });
+        setState(() => _shader = shader);
       } else {
         _shader = shader;
       }
@@ -67,9 +75,12 @@ class _InspireChildBlurImageFilterPassState
 
     return _BlurFiltered(
       shader: shader,
-      gradientMap: widget.gradientMap,
+      blurDistributionImage: widget.blurDistributionImage,
+      opacityDistributionImage: widget.opacityDistributionImage,
       transform: widget.transform,
+      widgetOpacity: widget.widgetOpacity,
       colorAdjustment: widget.colorAdjustment,
+      aspectRatioCorrection: widget.aspectRatioCorrection,
       direction: widget.direction,
       sigma: widget.sigma,
       child: widget.child,
@@ -79,18 +90,24 @@ class _InspireChildBlurImageFilterPassState
 
 class _BlurFiltered extends SingleChildRenderObjectWidget {
   final ui.FragmentShader shader;
-  final ui.Image gradientMap;
+  final DistributionImage blurDistributionImage;
+  final DistributionImage opacityDistributionImage;
   final BlurTransform transform;
+  final WidgetOpacity widgetOpacity;
   final BlurColorAdjustment colorAdjustment;
+  final AspectRatioCorrection aspectRatioCorrection;
   final Axis direction;
   final double sigma;
 
   const _BlurFiltered({
     super.child,
     required this.shader,
-    required this.gradientMap,
+    required this.blurDistributionImage,
+    required this.opacityDistributionImage,
     required this.transform,
+    required this.widgetOpacity,
     required this.colorAdjustment,
+    required this.aspectRatioCorrection,
     required this.direction,
     required this.sigma,
   });
@@ -102,9 +119,12 @@ class _BlurFiltered extends SingleChildRenderObjectWidget {
 
     return _BlurFilterRenderObject(
       shader,
-      gradientMap,
+      blurDistributionImage,
+      opacityDistributionImage,
       transform,
+      widgetOpacity,
       colorAdjustment,
+      aspectRatioCorrection,
       direction,
       sigma,
       scrollPosition,
@@ -123,9 +143,12 @@ class _BlurFiltered extends SingleChildRenderObjectWidget {
 
     renderObject
       ..shader = shader
-      ..gradientMap = gradientMap
+      ..blurDistributionImage = blurDistributionImage
+      ..opacityDistributionImage = opacityDistributionImage
       ..transform = transform
+      ..widgetOpacity = widgetOpacity
       ..colorAdjustment = colorAdjustment
+      ..aspectRatioCorrection = aspectRatioCorrection
       ..direction = direction
       ..sigma = sigma
       ..scrollPosition = scrollPosition
@@ -150,10 +173,17 @@ class _BlurFilterRenderObject extends RenderProxyBox {
     _updateShader();
   }
 
-  ui.Image _gradientMap;
-  set gradientMap(ui.Image value) {
-    if (_gradientMap == value) return;
-    _gradientMap = value;
+  DistributionImage _blurDistributionImage;
+  set blurDistributionImage(DistributionImage value) {
+    if (_blurDistributionImage == value) return;
+    _blurDistributionImage = value;
+    _updateShader();
+  }
+
+  DistributionImage _opacityDistributionImage;
+  set opacityDistributionImage(DistributionImage value) {
+    if (_opacityDistributionImage == value) return;
+    _opacityDistributionImage = value;
     _updateShader();
   }
 
@@ -164,10 +194,24 @@ class _BlurFilterRenderObject extends RenderProxyBox {
     _updateShader();
   }
 
+  WidgetOpacity _widgetOpacity;
+  set widgetOpacity(WidgetOpacity value) {
+    if (_widgetOpacity == value) return;
+    _widgetOpacity = value;
+    _updateShader();
+  }
+
   BlurColorAdjustment _colorAdjustment;
   set colorAdjustment(BlurColorAdjustment value) {
     if (_colorAdjustment == value) return;
     _colorAdjustment = value;
+    _updateShader();
+  }
+
+  AspectRatioCorrection _aspectRatioCorrection;
+  set aspectRatioCorrection(AspectRatioCorrection value) {
+    if (_aspectRatioCorrection == value) return;
+    _aspectRatioCorrection = value;
     _updateShader();
   }
 
@@ -209,9 +253,12 @@ class _BlurFilterRenderObject extends RenderProxyBox {
 
   _BlurFilterRenderObject(
     this._shader,
-    this._gradientMap,
+    this._blurDistributionImage,
+    this._opacityDistributionImage,
     this._transform,
+    this._widgetOpacity,
     this._colorAdjustment,
+    this._aspectRatioCorrection,
     this._direction,
     this._sigma,
     this._scrollPosition,
@@ -279,7 +326,16 @@ class _BlurFilterRenderObject extends RenderProxyBox {
   void _updateShader() {
     final normalizedOrigin = _transform.origin.toNormalizedOffset();
 
-    _shader.setImageSampler(1, _gradientMap);
+    _shader.setImageSampler(
+      1,
+      _blurDistributionImage.image,
+      filterQuality: kShaderMapSamplingQuality,
+    );
+    _shader.setImageSampler(
+      2,
+      _opacityDistributionImage.image,
+      filterQuality: kShaderMapSamplingQuality,
+    );
     _shader.setFloat(2, _sigma);
     _shader.setFloat(3, _direction == Axis.horizontal ? 1.0 : 0.0);
     _shader.setFloat(4, _direction == Axis.vertical ? 1.0 : 0.0);
@@ -298,6 +354,9 @@ class _BlurFilterRenderObject extends RenderProxyBox {
     _shader.setFloat(21, _colorAdjustment.shaderVibrance);
     _shader.setFloat(22, _colorAdjustment.blurAdjustmentStrength);
     _shader.setFloat(23, _colorAdjustment.nonBlurAdjustmentStrength);
+    _shader.setFloat(24, _widgetOpacity.shaderOpacityType);
+    _shader.setFloat(25, _widgetOpacity.shaderOpacityValue);
+    _shader.setFloat(26, _aspectRatioCorrection.shaderAspectRatio);
 
     _recreateImageFilter();
     markNeedsPaint();

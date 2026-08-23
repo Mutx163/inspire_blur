@@ -1,12 +1,13 @@
-import 'dart:ui' as ui;
-
 import 'package:flutter/widgets.dart';
 import 'package:inspire_blur/src/child_blur/inspire_child_blur_animated_sampler_pass.dart';
 import 'package:inspire_blur/src/child_blur/inspire_child_blur_image_filter_pass.dart';
+import 'package:inspire_blur/src/distribution/distribution_image.dart';
 import 'package:inspire_blur/src/inspire_backdrop_blur.dart';
 import 'package:inspire_blur/src/inspire_blur_config.dart';
 import 'package:inspire_blur/src/inspire_blur_mode.dart';
+import 'package:inspire_blur/src/model/inspire_blur_widget_type.dart';
 import 'package:inspire_blur/src/inspire_blur_wrapper.dart';
+import 'package:inspire_blur/src/model/aspect_ratio_correction.dart';
 import 'package:inspire_blur/src/utils/inspire_mode_resolver.dart';
 
 /// Applies a blur effect to the [child] widget.
@@ -85,16 +86,28 @@ class InspireChildBlur extends StatelessWidget {
 
     return InspireBlurWrapper(
       config: config,
+      widgetType: InspireBlurWidgetType.child,
       layoutInvalidationKey: layoutInvalidationKey,
       builder: (context, builderData) {
-        final gradientMap = builderData.blurGradientMap;
+        final blurDistributionImage = builderData.blurDistributionImage;
+        final opacityDistributionImage = builderData.opacityDistributionImage;
+        final globalBounds = builderData.globalBounds;
 
-        // Gradient map is not ready yet — skip a frame with no blur.
+        // Dependencies are not ready yet — skip a frame with no blur.
         // Typically it should not happen, unless during very low performance.
-        if (gradientMap == null) return child;
+        if (blurDistributionImage == null ||
+            opacityDistributionImage == null ||
+            globalBounds == null) {
+          return child;
+        }
 
         final sigmaHorizontal = config.effectiveSigmaX;
         final sigmaVertical = config.effectiveSigmaY;
+
+        final aspectRatioCorrection = AspectRatioCorrection.forDistribution(
+          distribution: config.blurDistribution,
+          bounds: globalBounds,
+        );
 
         if (sigmaHorizontal != null &&
             sigmaVertical != null &&
@@ -105,14 +118,18 @@ class InspireChildBlur extends StatelessWidget {
               child: _buildBlurPass(
                 context: context,
                 resolvedMode: resolvedMode,
-                gradientMap: gradientMap,
+                blurDistributionImage: blurDistributionImage,
+                opacityDistributionImage: opacityDistributionImage,
+                aspectRatioCorrection: aspectRatioCorrection,
                 direction: Axis.horizontal,
                 sigma: sigmaHorizontal,
                 applyColorAdjustment: true,
                 child: _buildBlurPass(
                   context: context,
                   resolvedMode: resolvedMode,
-                  gradientMap: gradientMap,
+                  blurDistributionImage: blurDistributionImage,
+                  opacityDistributionImage: opacityDistributionImage,
+                  aspectRatioCorrection: aspectRatioCorrection,
                   direction: Axis.vertical,
                   sigma: sigmaVertical,
                   applyColorAdjustment: false,
@@ -129,7 +146,9 @@ class InspireChildBlur extends StatelessWidget {
               child: _buildBlurPass(
                 context: context,
                 resolvedMode: resolvedMode,
-                gradientMap: gradientMap,
+                blurDistributionImage: blurDistributionImage,
+                opacityDistributionImage: opacityDistributionImage,
+                aspectRatioCorrection: aspectRatioCorrection,
                 direction: Axis.horizontal,
                 sigma: sigmaHorizontal,
                 applyColorAdjustment: true,
@@ -149,7 +168,9 @@ class InspireChildBlur extends StatelessWidget {
               child: _buildBlurPass(
                 context: context,
                 resolvedMode: resolvedMode,
-                gradientMap: gradientMap,
+                blurDistributionImage: blurDistributionImage,
+                opacityDistributionImage: opacityDistributionImage,
+                aspectRatioCorrection: aspectRatioCorrection,
                 direction: Axis.vertical,
                 sigma: sigmaVertical ?? 0.0,
                 applyColorAdjustment: true,
@@ -179,7 +200,9 @@ class InspireChildBlur extends StatelessWidget {
   Widget _buildBlurPass({
     required BuildContext context,
     required InspireBlurResolvedMode resolvedMode,
-    required ui.Image gradientMap,
+    required DistributionImage blurDistributionImage,
+    required DistributionImage opacityDistributionImage,
+    required AspectRatioCorrection aspectRatioCorrection,
     required Axis direction,
     required double sigma,
     required bool applyColorAdjustment,
@@ -193,18 +216,24 @@ class InspireChildBlur extends StatelessWidget {
 
     return switch (resolvedMode) {
       InspireBlurResolvedMode.imageFilter => InspireChildBlurImageFilterPass(
-          gradientMap: gradientMap,
+          blurDistributionImage: blurDistributionImage,
+          opacityDistributionImage: opacityDistributionImage,
           transform: config.transform,
+          widgetOpacity: config.widgetOpacity,
           colorAdjustment: currentPassColorAdjustment,
+          aspectRatioCorrection: aspectRatioCorrection,
           direction: direction,
           sigma: sigma,
           child: child,
         ),
       InspireBlurResolvedMode.animatedSampler =>
         InspireChildBlurAnimatedSamplerPass(
-          gradientMap: gradientMap,
+          blurDistributionImage: blurDistributionImage,
+          opacityDistributionImage: opacityDistributionImage,
           transform: config.transform,
+          widgetOpacity: config.widgetOpacity,
           colorAdjustment: currentPassColorAdjustment,
+          aspectRatioCorrection: aspectRatioCorrection,
           direction: direction,
           sigma: sigma,
           child: child,

@@ -1,12 +1,18 @@
+import 'dart:math' show max;
 import 'dart:ui' as ui show Image;
 
 import 'package:flutter/widgets.dart';
 import 'package:inspire_blur/src/color_adjustment/blur_color_adjustment.dart';
-import 'package:inspire_blur/src/distribution/blur_distribution.dart';
+import 'package:inspire_blur/src/distribution/distribution.dart';
+import 'package:inspire_blur/src/model/blur_edge_fade.dart';
+import 'package:inspire_blur/src/model/distribution_blend.dart';
+import 'package:inspire_blur/src/model/distribution_fit.dart';
+import 'package:inspire_blur/src/model/progression/progression.dart';
+import 'package:inspire_blur/src/opacity/widget_opacity.dart';
 import 'package:inspire_blur/src/transform/blur_transform.dart';
-import 'package:inspire_blur/src/utils/inspire_stops_generator.dart';
 
-/// Defines how blur is applied, including strength and spatial [distribution].
+/// Defines how blur is applied, including strength and spatial
+/// [blurDistribution].
 ///
 /// Allows for custom [transform] of the spatial distribution and
 /// [colorAdjustment] of the blur effect.
@@ -38,17 +44,28 @@ class InspireBlurConfig {
 
   /// Returns the effective horizontal blur strength specified
   /// by [sigma] or [sigmaX].
+  ///
+  /// A `null` value indicates no horizontal blur.
   double? get effectiveSigmaX => sigma ?? sigmaX;
 
   /// Returns the effective vertical blur strength specified
   /// by [sigma] or [sigmaY].
+  ///
+  /// A `null` value indicates no vertical blur.
   double? get effectiveSigmaY => sigma ?? sigmaY;
 
   /// Spatial distribution of the blur effect.
-  final BlurDistribution distribution;
+  final Distribution blurDistribution;
 
   /// Transformation of the blur effect distribution.
   final BlurTransform transform;
+
+  /// Widget opacity.
+  ///
+  /// Describes the spatial distribution of the widget opacity.
+  ///
+  /// Applies only to child blur. By default, the widget is fully opaque.
+  final WidgetOpacity widgetOpacity;
 
   /// Color adjustment of the blur effect.
   final BlurColorAdjustment colorAdjustment;
@@ -65,8 +82,9 @@ class InspireBlurConfig {
   /// Providing [sigma] together with [sigmaX] or [sigmaY] will throw an
   /// assertion error.
   const InspireBlurConfig({
-    required this.distribution,
+    required this.blurDistribution,
     this.transform = BlurTransform.identity,
+    this.widgetOpacity = const WidgetOpacity.solid(),
     this.colorAdjustment = const BlurColorAdjustment(),
     this.sigma,
     this.sigmaX,
@@ -90,30 +108,18 @@ class InspireBlurConfig {
 
   /// Progressive blur fading from top to bottom.
   ///
-  /// {@template inspire_blur_config.gradient_extent}
-  /// [extent] defines how far the blur gradient extends from the
-  /// starting point.
+  /// {@macro inspire_blur_config.progression_fade_range}
   ///
-  /// Typical values are in the range `[0.0, 1.0]`, although larger values
-  /// are also supported.
-  /// {@endtemplate}
-  ///
-  /// {@template inspire_blur_config.gradient_curves}
-  /// [fadeCurve] defines how blur intensity transitions across the gradient.
-  ///
-  /// For example:
-  /// * [Curves.easeIn] produces a smoother, more gradual fade than
-  ///   [Curves.linear], especially for large blur sigma values.
-  /// * [Curves.easeOut] concentrates most of the blur near the beginning,
-  ///   creating a more abrupt fade near the end.
-  /// {@endtemplate}
+  /// {@macro inspire_blur_config.progression_curves}
   factory InspireBlurConfig.topToBottom({
     double? sigma,
     double? sigmaX,
     double? sigmaY,
-    double extent = 1.0,
+    double fadeStart = 0.0,
+    double fadeEnd = 1.0,
     Curve fadeCurve = Curves.easeInSine,
-    BlurTransform transform = const BlurTransform(),
+    BlurTransform transform = BlurTransform.identity,
+    WidgetOpacity widgetOpacity = const WidgetOpacity.solid(),
     BlurColorAdjustment colorAdjustment = const BlurColorAdjustment(),
   }) {
     return InspireBlurConfig.directional(
@@ -122,25 +128,29 @@ class InspireBlurConfig {
       sigma: sigma,
       sigmaX: sigmaX,
       sigmaY: sigmaY,
-      extent: extent,
+      fadeStart: fadeStart,
+      fadeEnd: fadeEnd,
       fadeCurve: fadeCurve,
       transform: transform,
+      widgetOpacity: widgetOpacity,
       colorAdjustment: colorAdjustment,
     );
   }
 
   /// Progressive blur fading from bottom to top.
   ///
-  /// {@macro inspire_blur_config.gradient_extent}
+  /// {@macro inspire_blur_config.progression_fade_range}
   ///
-  /// {@macro inspire_blur_config.gradient_curves}
+  /// {@macro inspire_blur_config.progression_curves}
   factory InspireBlurConfig.bottomToTop({
     double? sigma,
     double? sigmaX,
     double? sigmaY,
-    double extent = 1.0,
+    double fadeStart = 0.0,
+    double fadeEnd = 1.0,
     Curve fadeCurve = Curves.easeInSine,
-    BlurTransform transform = const BlurTransform(),
+    BlurTransform transform = BlurTransform.identity,
+    WidgetOpacity widgetOpacity = const WidgetOpacity.solid(),
     BlurColorAdjustment colorAdjustment = const BlurColorAdjustment(),
   }) {
     return InspireBlurConfig.directional(
@@ -149,25 +159,29 @@ class InspireBlurConfig {
       sigma: sigma,
       sigmaX: sigmaX,
       sigmaY: sigmaY,
-      extent: extent,
+      fadeStart: fadeStart,
+      fadeEnd: fadeEnd,
       fadeCurve: fadeCurve,
       transform: transform,
+      widgetOpacity: widgetOpacity,
       colorAdjustment: colorAdjustment,
     );
   }
 
   /// Progressive blur fading from left to right.
   ///
-  /// {@macro inspire_blur_config.gradient_extent}
+  /// {@macro inspire_blur_config.progression_fade_range}
   ///
-  /// {@macro inspire_blur_config.gradient_curves}
+  /// {@macro inspire_blur_config.progression_curves}
   factory InspireBlurConfig.leftToRight({
     double? sigma,
     double? sigmaX,
     double? sigmaY,
-    double extent = 1.0,
+    double fadeStart = 0.0,
+    double fadeEnd = 1.0,
     Curve fadeCurve = Curves.easeInSine,
-    BlurTransform transform = const BlurTransform(),
+    BlurTransform transform = BlurTransform.identity,
+    WidgetOpacity widgetOpacity = const WidgetOpacity.solid(),
     BlurColorAdjustment colorAdjustment = const BlurColorAdjustment(),
   }) {
     return InspireBlurConfig.directional(
@@ -176,25 +190,29 @@ class InspireBlurConfig {
       sigma: sigma,
       sigmaX: sigmaX,
       sigmaY: sigmaY,
-      extent: extent,
+      fadeStart: fadeStart,
+      fadeEnd: fadeEnd,
       fadeCurve: fadeCurve,
       transform: transform,
+      widgetOpacity: widgetOpacity,
       colorAdjustment: colorAdjustment,
     );
   }
 
   /// Progressive blur fading from right to left.
   ///
-  /// {@macro inspire_blur_config.gradient_extent}
+  /// {@macro inspire_blur_config.progression_fade_range}
   ///
-  /// {@macro inspire_blur_config.gradient_curves}
+  /// {@macro inspire_blur_config.progression_curves}
   factory InspireBlurConfig.rightToLeft({
     double? sigma,
     double? sigmaX,
     double? sigmaY,
-    double extent = 1.0,
+    double fadeStart = 0.0,
+    double fadeEnd = 1.0,
     Curve fadeCurve = Curves.easeInSine,
-    BlurTransform transform = const BlurTransform(),
+    BlurTransform transform = BlurTransform.identity,
+    WidgetOpacity widgetOpacity = const WidgetOpacity.solid(),
     BlurColorAdjustment colorAdjustment = const BlurColorAdjustment(),
   }) {
     return InspireBlurConfig.directional(
@@ -203,47 +221,190 @@ class InspireBlurConfig {
       sigma: sigma,
       sigmaX: sigmaX,
       sigmaY: sigmaY,
-      extent: extent,
+      fadeStart: fadeStart,
+      fadeEnd: fadeEnd,
       fadeCurve: fadeCurve,
       transform: transform,
+      widgetOpacity: widgetOpacity,
       colorAdjustment: colorAdjustment,
     );
   }
 
   /// Progressive blur from [begin] to [end].
   ///
-  /// {@macro inspire_blur_config.gradient_extent}
+  /// {@template inspire_blur_config.progression_fade_range}
+  /// [fadeStart] defines where the blur progression starts.
   ///
-  /// {@macro inspire_blur_config.gradient_curves}
+  /// [fadeEnd] defines where the blur progression ends.
+  ///
+  /// Typical values are in the range `[0.0, 1.0]`, although values outside
+  /// this range are also supported.
+  ///
+  /// [fadeEnd] must be greater than or equal to [fadeStart].
+  /// {@endtemplate}
+  ///
+  /// {@template inspire_blur_config.progression_curves}
+  /// [fadeCurve] defines how blur intensity transitions across the progression.
+  ///
+  /// For example:
+  /// * [Curves.easeIn] produces a smoother, more gradual fade than
+  ///   [Curves.linear], especially for large blur sigma values.
+  /// * [Curves.easeOut] concentrates most of the blur near the beginning,
+  ///   creating a more abrupt fade near the end.
+  /// {@endtemplate}
   factory InspireBlurConfig.directional({
     required Alignment begin,
     required Alignment end,
     double? sigma,
     double? sigmaX,
     double? sigmaY,
-    double extent = 1.0,
+    double fadeStart = 0.0,
+    double fadeEnd = 1.0,
     Curve fadeCurve = Curves.easeInSine,
-    BlurTransform transform = const BlurTransform(),
+    BlurTransform transform = BlurTransform.identity,
+    WidgetOpacity widgetOpacity = const WidgetOpacity.solid(),
     BlurColorAdjustment colorAdjustment = const BlurColorAdjustment(),
   }) {
     assert(
-      extent >= 0.0,
-      'extent must be greater than or equal to 0.0',
+      fadeStart <= fadeEnd,
+      'fadeStart must be less than or equal to fadeEnd',
     );
-
-    final points = curveToValuesAndStops(endStop: extent, curve: fadeCurve);
 
     return InspireBlurConfig(
       sigma: sigma,
       sigmaX: sigmaX,
       sigmaY: sigmaY,
-      distribution: DirectionalDistribution(
+      blurDistribution: DirectionalDistribution(
         begin: begin,
         end: end,
-        values: points.map((e) => e.$1).toList(),
-        stops: points.map((e) => e.$2).toList(),
+        progression: Progression.gradient(
+          start: fadeStart,
+          end: fadeEnd,
+          curve: fadeCurve,
+        ),
       ),
       transform: transform,
+      widgetOpacity: widgetOpacity,
+      colorAdjustment: colorAdjustment,
+    );
+  }
+
+  factory InspireBlurConfig.edges({
+    BlurEdgeFade? top,
+    BlurEdgeFade? bottom,
+    BlurEdgeFade? left,
+    BlurEdgeFade? right,
+    DistributionBlend blend = const DistributionBlend.max(),
+    BlurTransform transform = BlurTransform.identity,
+    WidgetOpacity widgetOpacity = const WidgetOpacity.solid(),
+    BlurColorAdjustment colorAdjustment = const BlurColorAdjustment(),
+  }) {
+    final allEdges = [top, bottom, left, right].nonNulls;
+
+    final double? sigma, sigmaX, sigmaY;
+
+    if (allEdges.isEmpty) {
+      sigma = 0.0;
+      sigmaX = null;
+      sigmaY = null;
+    } else {
+      sigma = BlurEdgeFade.effectiveMaxSigma(allEdges);
+      sigmaX = BlurEdgeFade.effectiveMaxSigmaX(allEdges);
+      sigmaY = BlurEdgeFade.effectiveMaxSigmaY(allEdges);
+    }
+
+    final maxSigma = max(sigma ?? 0.0, max(sigmaX ?? 0.0, sigmaY ?? 0.0));
+
+    return InspireBlurConfig(
+      sigma: sigma,
+      sigmaX: sigmaX,
+      sigmaY: sigmaY,
+      blurDistribution: CombinedDistribution(
+        distributions: [
+          if (top != null)
+            DirectionalDistribution(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              progression: top.progression,
+              strengthFactor: maxSigma == 0.0 ? 0.0 : top.maxSigma() / maxSigma,
+            ),
+          if (bottom != null)
+            DirectionalDistribution(
+              begin: Alignment.bottomCenter,
+              end: Alignment.topCenter,
+              progression: bottom.progression,
+              strengthFactor:
+                  maxSigma == 0.0 ? 0.0 : bottom.maxSigma() / maxSigma,
+            ),
+          if (left != null)
+            DirectionalDistribution(
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              progression: left.progression,
+              strengthFactor:
+                  maxSigma == 0.0 ? 0.0 : left.maxSigma() / maxSigma,
+            ),
+          if (right != null)
+            DirectionalDistribution(
+              begin: Alignment.centerRight,
+              end: Alignment.centerLeft,
+              progression: right.progression,
+              strengthFactor:
+                  maxSigma == 0.0 ? 0.0 : right.maxSigma() / maxSigma,
+            ),
+        ],
+        blend: blend,
+      ),
+      transform: transform,
+      widgetOpacity: widgetOpacity,
+      colorAdjustment: colorAdjustment,
+    );
+  }
+
+  /// Blur with a circular fade.
+  ///
+  /// [radius] defines the size of the circular blur region as a fraction
+  /// of the area.
+  ///
+  /// Typical values are in the range `[0.0, 1.0]`, although values greater
+  /// than `1.0` are also supported. This causes the circle to extend beyond
+  /// the widget bounds, which can be useful for creating large vignette or
+  /// spotlight effects.
+  ///
+  /// {@template inspire_blur_config.progression_feather}
+  /// [feather] is the width of the blur transition. A value of `0.0` creates
+  /// a hard edge, while larger values create a softer and more gradual
+  /// transition.
+  /// {@endtemplate}
+  ///
+  /// [center] specifies the center point of the circular blur region.
+  /// The default is [Alignment.center].
+  ///
+  /// {@macro inspire_blur_config.progression_curves}
+  factory InspireBlurConfig.circle({
+    required double radius,
+    double? sigma,
+    double? sigmaX,
+    double? sigmaY,
+    double feather = 1.0,
+    Alignment center = Alignment.center,
+    Curve fadeCurve = Curves.easeOutSine,
+    BlurTransform transform = BlurTransform.identity,
+    WidgetOpacity widgetOpacity = const WidgetOpacity.solid(),
+    BlurColorAdjustment colorAdjustment = const BlurColorAdjustment(),
+  }) {
+    return InspireBlurConfig.ellipse(
+      radiusX: radius,
+      radiusY: radius,
+      sigma: sigma,
+      sigmaX: sigmaX,
+      sigmaY: sigmaY,
+      feather: feather,
+      center: center,
+      fadeCurve: fadeCurve,
+      distributionFit: DistributionFit.inside,
+      transform: transform,
+      widgetOpacity: widgetOpacity,
       colorAdjustment: colorAdjustment,
     );
   }
@@ -258,16 +419,15 @@ class InspireBlurConfig {
   /// the widget bounds, which can be useful for creating large vignette or
   /// spotlight effects.
   ///
-  /// {@template inspire_blur_config.gradient_feather}
-  /// [feather] is the width of the blur transition. A value of `0.0` creates
-  /// a hard edge, while larger values create a softer and more gradual
-  /// transition.
-  /// {@endtemplate}
+  /// {@macro inspire_blur_config.progression_feather}
   ///
   /// [center] specifies the center point of the elliptical blur region.
   /// The default is [Alignment.center].
   ///
-  /// {@macro inspire_blur_config.gradient_curves}
+  /// {@macro inspire_blur_config.progression_curves}
+  ///
+  /// [distributionFit] controls how the distribution is fitted to the
+  /// widget bounds. By default, it fills the available area.
   factory InspireBlurConfig.ellipse({
     required double radiusX,
     required double radiusY,
@@ -276,8 +436,10 @@ class InspireBlurConfig {
     double? sigmaY,
     double feather = 1.0,
     Alignment center = Alignment.center,
+    DistributionFit distributionFit = DistributionFit.fill,
     Curve fadeCurve = Curves.easeOutSine,
-    BlurTransform transform = const BlurTransform(),
+    BlurTransform transform = BlurTransform.identity,
+    WidgetOpacity widgetOpacity = const WidgetOpacity.solid(),
     BlurColorAdjustment colorAdjustment = const BlurColorAdjustment(),
   }) {
     assert(
@@ -285,24 +447,101 @@ class InspireBlurConfig {
       'feather must be in the range [0.0, 1.0]',
     );
 
-    final points = curveToValuesAndStops(
-      startStop: 1.0 - feather,
-      endStop: 1.0,
-      curve: fadeCurve,
-    );
-
     return InspireBlurConfig(
       sigma: sigma,
       sigmaX: sigmaX,
       sigmaY: sigmaY,
-      distribution: EllipseDistribution(
+      blurDistribution: EllipseDistribution(
         radiusX: radiusX,
         radiusY: radiusY,
         center: center,
-        values: points.map((e) => e.$1).toList(),
-        stops: points.map((e) => e.$2).toList(),
+        progression: Progression.gradient(
+          start: 1.0 - feather,
+          end: 1.0,
+          curve: fadeCurve,
+        ),
+        distributionFit: distributionFit,
       ),
       transform: transform,
+      widgetOpacity: widgetOpacity,
+      colorAdjustment: colorAdjustment,
+    );
+  }
+
+  /// Blur with a square fade.
+  ///
+  /// [inset] is the distance from the left and right or top and bottom
+  /// edge of the widget to the rectangular blur region (whichever pair
+  /// is shorter).
+  ///
+  /// {@macro inspire_blur_config.progression_feather}
+  ///
+  /// [inset] and [feather] are normalized to the range `[0.0, 1.0]`.
+  ///
+  /// {@macro inspire_blur_config.progression_curves}
+  factory InspireBlurConfig.square({
+    double inset = 0.0,
+    double feather = 0.5,
+    double? sigma,
+    double? sigmaX,
+    double? sigmaY,
+    Curve fadeCurve = Curves.easeOutSine,
+    BlurTransform transform = BlurTransform.identity,
+    WidgetOpacity widgetOpacity = const WidgetOpacity.solid(),
+    BlurColorAdjustment colorAdjustment = const BlurColorAdjustment(),
+  }) {
+    return InspireBlurConfig.rectangle(
+      horizontalInset: inset,
+      verticalInset: inset,
+      feather: feather,
+      sigma: sigma,
+      sigmaX: sigmaX,
+      sigmaY: sigmaY,
+      fadeCurve: fadeCurve,
+      distributionFit: DistributionFit.inside,
+      transform: transform,
+      widgetOpacity: widgetOpacity,
+      colorAdjustment: colorAdjustment,
+    );
+  }
+
+  /// Blur with a rounded square fade.
+  ///
+  /// [inset] is the distance from the left and right or top and bottom
+  /// edge of the widget to the rectangular blur region (whichever pair
+  /// is shorter).
+  ///
+  /// [cornerRadius] is the radius of the rectangle corners.
+  ///
+  /// {@macro inspire_blur_config.progression_feather}
+  ///
+  /// [inset] and [feather] are normalized to the range `[0.0, 1.0]`.
+  ///
+  /// {@macro inspire_blur_config.progression_curves}
+  factory InspireBlurConfig.roundedSquare({
+    double inset = 0.0,
+    required double cornerRadius,
+    double feather = 0.5,
+    double? sigma,
+    double? sigmaX,
+    double? sigmaY,
+    Curve fadeCurve = Curves.easeOutSine,
+    BlurTransform transform = BlurTransform.identity,
+    WidgetOpacity widgetOpacity = const WidgetOpacity.solid(),
+    BlurColorAdjustment colorAdjustment = const BlurColorAdjustment(),
+  }) {
+    return InspireBlurConfig.roundedRectangle(
+      horizontalInset: inset,
+      verticalInset: inset,
+      cornerRadius: cornerRadius,
+      feather: feather,
+      sigma: sigma,
+      sigmaX: sigmaX,
+      sigmaY: sigmaY,
+      fadeCurve: fadeCurve,
+      distributionFit: DistributionFit.inside,
+      transform: transform,
+      widgetOpacity: widgetOpacity,
       colorAdjustment: colorAdjustment,
     );
   }
@@ -315,21 +554,26 @@ class InspireBlurConfig {
   /// [verticalInset] is the distance from the top and bottom edges of
   /// the widget to the rectangular blur region.
   ///
-  /// {@macro inspire_blur_config.gradient_feather}
+  /// {@macro inspire_blur_config.progression_feather}
   ///
   /// [horizontalInset], [verticalInset], and [feather] are normalized
   /// to the range `[0.0, 1.0]`.
   ///
-  /// {@macro inspire_blur_config.gradient_curves}
+  /// {@macro inspire_blur_config.progression_curves}
+  ///
+  /// [distributionFit] controls how the distribution is fitted to the
+  /// widget bounds. By default, it fills the available area.
   factory InspireBlurConfig.rectangle({
-    required double horizontalInset,
-    required double verticalInset,
-    required double feather,
+    double horizontalInset = 0.0,
+    double verticalInset = 0.0,
+    double feather = 0.5,
     double? sigma,
     double? sigmaX,
     double? sigmaY,
     Curve fadeCurve = Curves.easeOutSine,
-    BlurTransform transform = const BlurTransform(),
+    DistributionFit distributionFit = DistributionFit.fill,
+    BlurTransform transform = BlurTransform.identity,
+    WidgetOpacity widgetOpacity = const WidgetOpacity.solid(),
     BlurColorAdjustment colorAdjustment = const BlurColorAdjustment(),
   }) {
     return InspireBlurConfig.roundedRectangle(
@@ -341,7 +585,9 @@ class InspireBlurConfig {
       sigmaX: sigmaX,
       sigmaY: sigmaY,
       fadeCurve: fadeCurve,
+      distributionFit: distributionFit,
       transform: transform,
+      widgetOpacity: widgetOpacity,
       colorAdjustment: colorAdjustment,
     );
   }
@@ -356,22 +602,27 @@ class InspireBlurConfig {
   ///
   /// [cornerRadius] is the radius of the rectangle corners.
   ///
-  /// {@macro inspire_blur_config.gradient_feather}
+  /// {@macro inspire_blur_config.progression_feather}
   ///
   /// [horizontalInset], [verticalInset], [cornerRadius], and [feather]
   /// are normalized to the range `[0.0, 1.0]`.
   ///
-  /// {@macro inspire_blur_config.gradient_curves}
+  /// {@macro inspire_blur_config.progression_curves}
+  ///
+  /// [distributionFit] controls how the distribution is fitted to the
+  /// widget bounds. By default, it fills the available area.
   factory InspireBlurConfig.roundedRectangle({
-    required double horizontalInset,
-    required double verticalInset,
+    double horizontalInset = 0.0,
+    double verticalInset = 0.0,
     required double cornerRadius,
-    required double feather,
+    double feather = 0.5,
     double? sigma,
     double? sigmaX,
     double? sigmaY,
     Curve fadeCurve = Curves.easeOutSine,
-    BlurTransform transform = const BlurTransform(),
+    DistributionFit distributionFit = DistributionFit.fill,
+    BlurTransform transform = BlurTransform.identity,
+    WidgetOpacity widgetOpacity = const WidgetOpacity.solid(),
     BlurColorAdjustment colorAdjustment = const BlurColorAdjustment(),
   }) {
     assert(
@@ -379,24 +630,23 @@ class InspireBlurConfig {
       'feather must be in the range [0.0, 1.0]',
     );
 
-    final points = curveToValuesAndStops(
-      startStop: 1.0 - feather,
-      endStop: 1.0,
-      curve: fadeCurve,
-    );
-
     return InspireBlurConfig(
       sigma: sigma,
       sigmaX: sigmaX,
       sigmaY: sigmaY,
-      distribution: RRectDistribution(
+      blurDistribution: RRectDistribution(
         horizontalInset: horizontalInset,
         verticalInset: verticalInset,
         cornerRadius: cornerRadius,
-        values: points.map((e) => e.$1).toList(),
-        stops: points.map((e) => e.$2).toList(),
+        progression: Progression.gradient(
+          start: 1.0 - feather,
+          end: 1.0,
+          curve: fadeCurve,
+        ),
+        distributionFit: distributionFit,
       ),
       transform: transform,
+      widgetOpacity: widgetOpacity,
       colorAdjustment: colorAdjustment,
     );
   }
@@ -408,7 +658,7 @@ class InspireBlurConfig {
   /// The intensity of the blur effect is controlled by the red channel,
   /// whereas other channels, including alpha, are ignored.
   ///
-  /// ### Recommendations
+  /// ## Recommendations
   ///
   /// * Use an image between 64×64 and 1024×1024 pixels.
   /// * Make image grayscale and fully opaque.
@@ -422,7 +672,7 @@ class InspireBlurConfig {
   /// The caller retains ownership of [maskImage] and is responsible for
   /// disposing it after it is no longer used by the blur effect.
   ///
-  /// ### Example
+  /// ## Example
   ///
   /// ```dart
   /// ui.Image? maskImage;
@@ -461,7 +711,8 @@ class InspireBlurConfig {
     double? sigma,
     double? sigmaX,
     double? sigmaY,
-    BlurTransform transform = const BlurTransform(),
+    BlurTransform transform = BlurTransform.identity,
+    WidgetOpacity widgetOpacity = const WidgetOpacity.solid(),
     BlurColorAdjustment colorAdjustment = const BlurColorAdjustment(),
   }) {
     assert(
@@ -473,10 +724,11 @@ class InspireBlurConfig {
       sigma: sigma,
       sigmaX: sigmaX,
       sigmaY: sigmaY,
-      distribution: ImageMaskDistribution(
+      blurDistribution: ImageMaskDistribution(
         maskImage: maskImage,
       ),
       transform: transform,
+      widgetOpacity: widgetOpacity,
       colorAdjustment: colorAdjustment,
     );
   }
@@ -486,14 +738,17 @@ class InspireBlurConfig {
     double? sigma,
     double? sigmaX,
     double? sigmaY,
+    BlurTransform transform = BlurTransform.identity,
+    WidgetOpacity widgetOpacity = const WidgetOpacity.solid(),
     BlurColorAdjustment colorAdjustment = const BlurColorAdjustment(),
   }) {
     return InspireBlurConfig(
       sigma: sigma,
       sigmaX: sigmaX,
       sigmaY: sigmaY,
-      distribution: const UniformDistribution(),
-      transform: BlurTransform.identity,
+      blurDistribution: const UniformDistribution(),
+      transform: transform,
+      widgetOpacity: widgetOpacity,
       colorAdjustment: colorAdjustment,
     );
   }
@@ -505,17 +760,39 @@ class InspireBlurConfig {
     double? sigma,
     double? sigmaX,
     double? sigmaY,
-    BlurDistribution? distribution,
+    Distribution? blurDistribution,
     BlurTransform? transform,
+    WidgetOpacity? widgetOpacity,
     BlurColorAdjustment? colorAdjustment,
   }) {
     return InspireBlurConfig(
       sigma: sigma ?? this.sigma,
       sigmaX: sigmaX ?? this.sigmaX,
       sigmaY: sigmaY ?? this.sigmaY,
-      distribution: distribution ?? this.distribution,
+      blurDistribution: blurDistribution ?? this.blurDistribution,
       transform: transform ?? this.transform,
+      widgetOpacity: widgetOpacity ?? this.widgetOpacity,
       colorAdjustment: colorAdjustment ?? this.colorAdjustment,
+    );
+  }
+
+  /// Returns a copy of this config with all sigma values replaced with
+  /// [sigma], [sigmaX], and [sigmaY] parameter values.
+  ///
+  /// Value of `null` replaces the current config sigma value.
+  InspireBlurConfig withSigma({
+    double? sigma,
+    double? sigmaX,
+    double? sigmaY,
+  }) {
+    return InspireBlurConfig(
+      sigma: sigma,
+      sigmaX: sigmaX,
+      sigmaY: sigmaY,
+      blurDistribution: blurDistribution,
+      transform: transform,
+      widgetOpacity: widgetOpacity,
+      colorAdjustment: colorAdjustment,
     );
   }
 
@@ -525,8 +802,9 @@ class InspireBlurConfig {
       sigmaX: sigma,
       sigmaY: null,
       sigma: null,
-      distribution: distribution,
+      blurDistribution: blurDistribution,
       transform: transform,
+      widgetOpacity: widgetOpacity,
       colorAdjustment: colorAdjustment,
     );
   }
@@ -537,8 +815,9 @@ class InspireBlurConfig {
       sigmaX: null,
       sigmaY: sigma,
       sigma: null,
-      distribution: distribution,
+      blurDistribution: blurDistribution,
       transform: transform,
+      widgetOpacity: widgetOpacity,
       colorAdjustment: colorAdjustment,
     );
   }
@@ -551,8 +830,9 @@ class InspireBlurConfig {
         other.sigma == sigma &&
         other.sigmaX == sigmaX &&
         other.sigmaY == sigmaY &&
-        other.distribution == distribution &&
+        other.blurDistribution == blurDistribution &&
         other.transform == transform &&
+        other.widgetOpacity == widgetOpacity &&
         other.colorAdjustment == colorAdjustment;
   }
 
@@ -561,8 +841,9 @@ class InspireBlurConfig {
         sigma,
         sigmaX,
         sigmaY,
-        distribution,
+        blurDistribution,
         transform,
+        widgetOpacity,
         colorAdjustment,
       );
 
@@ -571,8 +852,9 @@ class InspireBlurConfig {
       'sigma: $sigma, '
       'sigmaX: $sigmaX, '
       'sigmaY: $sigmaY, '
-      'distribution: $distribution, '
-      'transform: $transform,'
+      'blurDistribution: $blurDistribution, '
+      'transform: $transform, '
+      'widgetOpacity: $widgetOpacity, '
       'colorAdjustment: $colorAdjustment'
       ')';
 }

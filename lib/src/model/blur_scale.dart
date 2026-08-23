@@ -36,10 +36,8 @@ class BlurScale {
   ///
   /// * Negative [scaleX] mirrors the blur distribution horizontally.
   /// * Negative [scaleY] mirrors the blur distribution vertically.
-  const factory BlurScale.nonUniform({
-    required double scaleX,
-    required double scaleY,
-  }) = BlurScale._;
+  factory BlurScale.nonUniform({double scaleX = 1.0, double scaleY = 1.0}) =>
+      BlurScale._(scaleX: scaleX, scaleY: scaleY);
 
   /// Returns a copy of this scale with the provided properties updated.
   ///

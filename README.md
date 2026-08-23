@@ -388,6 +388,15 @@ On Web, only child blur with `InspireBlurMode.animatedSampler` is supported.
 >
 > Try using `InspireBlurMode.animatedSampler`, which works better in scrollable widgets and dynamically changing layouts.
 
+> **I'm using blur for video player**
+>
+> Inspire Blur supports texture-backed video content. Make sure the player uses a texture view rather then a platform view.
+>
+> Please note that texture-based content is supported by backdrop blur and child blur in `imageFilter` mode.
+> Child blur in `animatedSampler` mode does not support it.
+>
+> For reference, see: https://github.com/inspirestack/inspire_blur/issues/4#issuecomment-5307178797
+
 > **I’m using platform views**
 >
 > Blur effects currently do not support platform views such as:

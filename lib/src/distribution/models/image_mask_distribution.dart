@@ -1,10 +1,10 @@
-part of 'package:inspire_blur/src/distribution/blur_distribution.dart';
+part of 'package:inspire_blur/src/distribution/distribution.dart';
 
 /// An image mask blur distribution.
 ///
 /// Blur intensity on each point of the area is controlled by the
 /// corresponding point on the [maskImage].
-class ImageMaskDistribution extends BlurDistribution {
+final class ImageMaskDistribution extends Distribution {
   /// Mask image that controls the blur intensity over the blur area.
   ///
   /// The intensity of the blur effect is controlled by the red channel,
@@ -28,13 +28,17 @@ class ImageMaskDistribution extends BlurDistribution {
   ///
   /// The caller retains ownership of [maskImage] and is responsible for
   /// disposing it after it is no longer used by the blur effect.
-  ImageMaskDistribution({required this.maskImage});
+  const ImageMaskDistribution({required this.maskImage})
+      : super(strengthFactor: 1.0);
 
   /// Returns a copy of this distribution with the new image.
   ///
   /// Any parameter left `null` retains its current value.
   @override
-  ImageMaskDistribution copyWith({ui.Image? maskImage}) {
+  ImageMaskDistribution copyWith({
+    ui.Image? maskImage,
+    double? strengthFactor,
+  }) {
     return ImageMaskDistribution(maskImage: maskImage ?? this.maskImage);
   }
 
@@ -42,12 +46,17 @@ class ImageMaskDistribution extends BlurDistribution {
   bool operator ==(Object other) {
     if (identical(this, other)) return true;
 
-    return other is ImageMaskDistribution && other.maskImage == maskImage;
+    return other is ImageMaskDistribution &&
+        other.maskImage == maskImage &&
+        other.strengthFactor == strengthFactor;
   }
 
   @override
-  int get hashCode => maskImage.hashCode;
+  int get hashCode => Object.hash(maskImage, strengthFactor);
 
   @override
-  String toString() => 'ImageMaskDistribution(maskImage: $maskImage)';
+  String toString() => 'ImageMaskDistribution('
+      'maskImage: $maskImage, '
+      'strengthFactor: $strengthFactor'
+      ')';
 }

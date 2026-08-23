@@ -1,9 +1,10 @@
-import 'package:inspire_blur/src/distribution/blur_distribution_map.dart';
+import 'package:inspire_blur/src/distribution/distribution_map.dart';
 
 class UniformDistributionMap extends IntensityBasedDistributionMap {
   const UniformDistributionMap({
     required super.width,
     required super.height,
+    required super.strengthFactor,
   });
 
   @override

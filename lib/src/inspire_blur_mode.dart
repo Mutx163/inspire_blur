@@ -8,13 +8,13 @@ import 'package:flutter_shaders/flutter_shaders.dart';
 /// Different modes offer different trade-offs affecting performance,
 /// visual stability and compatibility in different use cases.
 ///
-/// ### Quick guide
+/// ## Quick guide
 ///
 /// * Use [auto] for most cases.
 /// * Use [imageFilter] for static, complex UI.
 /// * Use [animatedSampler] for stability in scrollable or transformed layouts.
 ///
-/// ### Performance
+/// ## Performance
 ///
 /// Performance between [imageFilter] and [animatedSampler] might differ
 /// depending on the context where blur is used. One might be slightly faster

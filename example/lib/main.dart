@@ -1,15 +1,15 @@
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 import 'package:inspire_blur/inspire_blur.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Warm up the GLSL fragment shaders for seamless, stutter-free performance
-  Inspire.warmUp();
+  // Optional: Warm up to ensure no shader loading stutter on first draw.
+  await Inspire.warmUp();
 
-  // Set edge-to-edge mode for a transparent status bar
-  _initializeUi();
+  // Set edge-to-edge mode for a transparent status bar.
+  await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
 
   runApp(const _ExampleApp());
 }
@@ -19,10 +19,18 @@ class _ExampleApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
+    return WidgetsApp(
       title: 'Inspire Blur Demo',
+      color: _colorWhite,
       debugShowCheckedModeBanner: false,
-      home: _DemoScreen(),
+      pageRouteBuilder: <T>(settings, builder) => PageRouteBuilder<T>(
+        settings: settings,
+        pageBuilder: (context, _, __) => builder(context),
+      ),
+      home: const AnnotatedRegion<SystemUiOverlayStyle>(
+        value: SystemUiOverlayStyle.dark,
+        child: _DemoScreen(),
+      ),
     );
   }
 }
@@ -39,28 +47,23 @@ class _DemoScreenState extends State<_DemoScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.grey.shade50,
-      bottomNavigationBar: NavigationBar(
-        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-        selectedIndex: _currentPage,
-        onDestinationSelected: (index) => setState(() => _currentPage = index),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.layers_rounded),
-            label: 'Backdrop blur',
+    return ColoredBox(
+      color: _colorGrey50,
+      child: Column(
+        children: [
+          Expanded(
+            child: IndexedStack(
+              index: _currentPage,
+              children: const [
+                _BackdropBlurDemo(key: PageStorageKey('backdrop_blur')),
+                _ChildBlurDemo(key: PageStorageKey('child_blur')),
+              ],
+            ),
           ),
-          NavigationDestination(
-            icon: Icon(Icons.widgets_rounded),
-            label: 'Child blur',
+          _BottomNavigation(
+            currentPage: _currentPage,
+            onPageChange: (newPage) => setState(() => _currentPage = newPage),
           ),
-        ],
-      ),
-      body: IndexedStack(
-        index: _currentPage,
-        children: const [
-          _BackdropBlurDemo(key: PageStorageKey('backdrop_blur')),
-          _ChildBlurDemo(key: PageStorageKey('child_blur')),
         ],
       ),
     );
@@ -76,21 +79,16 @@ class _BackdropBlurDemo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Stack that expands to the whole screen
     return Stack(
       fit: StackFit.expand,
       children: [
-        // Content to be blurred
         const Positioned.fill(child: _BackdropBlurDemoContent()),
 
-        // Backdrop blur effect that will blur the content behind it.
+        // Backdrop blur effect that blurs the content behind it.
         //
-        // To render a top fade, the backdrop blur doesn't have to fill
-        // the whole screen.
-        //
-        // For better performance, the blur effect should only be displayed
-        // where it is actually applied. In this example it takes only
-        // 132dp from the top of the screen.
+        // To apply a top fading blur, backdrop blur does not need to fill
+        // the entire stack. For efficiency, blur effect should be positioned
+        // only where it is actually rendered.
         Positioned(
           left: 0,
           right: 0,
@@ -143,7 +141,7 @@ class _BackdropBlurDemoContent extends StatelessWidget {
           borderRadius: BorderRadius.circular(radius),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.125),
+              color: const Color(0xFF000000).withValues(alpha: 0.125),
               blurRadius: 44,
               offset: const Offset(5, 34),
             ),
@@ -153,10 +151,7 @@ class _BackdropBlurDemoContent extends StatelessWidget {
           borderRadius: BorderRadius.circular(radius),
           child: AspectRatio(
             aspectRatio: 1.4,
-            child: Image.network(
-              imagePath,
-              fit: BoxFit.cover,
-            ),
+            child: _DemoImage(imagePath: imagePath),
           ),
         ),
       ),
@@ -210,7 +205,7 @@ class _ChildBlurDemo extends StatelessWidget {
   }
 }
 
-/// List with image cards for the child blur example.
+/// Image card demonstrating child blur.
 class _ChildBlurDemoCard extends StatelessWidget {
   const _ChildBlurDemoCard({
     super.key,
@@ -237,7 +232,7 @@ class _ChildBlurDemoCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(radius),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.175),
+                color: _colorBlack.withValues(alpha: 0.175),
                 blurRadius: 21,
                 offset: const Offset(5, 13),
               ),
@@ -251,12 +246,12 @@ class _ChildBlurDemoCard extends StatelessWidget {
                   child: _buildBackgroundImage(animationValue: animationValue),
                 ),
 
-                // Additional tint making the fade look more distinct
+                // Additional tint to make the fade look more pronounced
                 Positioned.fill(
                   child: Inspire.tint.bottomToTop(
                     color: tintColor,
                     opacity: 0.5,
-                    extent: 0.5,
+                    fadeEnd: 0.5,
                     curve: Curves.easeOut,
                   ),
                 ),
@@ -280,7 +275,7 @@ class _ChildBlurDemoCard extends StatelessWidget {
     return Inspire.childBlur(
       config: InspireBlurConfig.bottomToTop(
         sigma: 55,
-        extent: 0.5,
+        fadeEnd: 0.5,
         fadeCurve: Curves.easeInOutQuad,
       ),
 
@@ -288,10 +283,7 @@ class _ChildBlurDemoCard extends StatelessWidget {
       child: Transform.scale(
         scale: 1.0 + animationValue * 0.4,
         alignment: Alignment.topCenter,
-        child: Image.network(
-          imagePath,
-          fit: BoxFit.cover,
-        ),
+        child: _DemoImage(imagePath: imagePath),
       ),
     );
   }
@@ -305,10 +297,10 @@ class _ChildBlurDemoCard extends StatelessWidget {
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.w900,
-            color: Colors.white,
+            color: _colorWhite,
             shadows: [
               Shadow(
-                color: Colors.black.withValues(alpha: 0.25),
+                color: _colorBlack.withValues(alpha: 0.25),
                 blurRadius: 55,
                 offset: const Offset(0, 5),
               ),
@@ -320,7 +312,7 @@ class _ChildBlurDemoCard extends StatelessWidget {
           style: const TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w700,
-            color: Colors.white,
+            color: _colorWhite,
           ),
         ),
       ],
@@ -335,37 +327,37 @@ class _ChildBlurDemoCard extends StatelessWidget {
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 const _demoImages = [
-  _DemoImage(
+  _DemoImageModel(
     'https://raw.githubusercontent.com/inspirestack/inspire_blur/main/assets/example/images/watermelon.jpg',
     Color.fromARGB(255, 189, 189, 189),
     'Watermelon',
     'Citrullus lanatus',
   ),
-  _DemoImage(
+  _DemoImageModel(
     'https://raw.githubusercontent.com/inspirestack/inspire_blur/main/assets/example/images/cosmos-flowers.jpg',
     Color.fromARGB(255, 202, 244, 134),
     'Cosmos Flowers',
     'Found at allotments · Wrocław, PL',
   ),
-  _DemoImage(
+  _DemoImageModel(
     'https://raw.githubusercontent.com/inspirestack/inspire_blur/main/assets/example/images/head-of-david.jpg',
     Color.fromARGB(255, 224, 224, 224),
     'Head of David',
     'Marble sculpture',
   ),
-  _DemoImage(
+  _DemoImageModel(
     'https://raw.githubusercontent.com/inspirestack/inspire_blur/main/assets/example/images/london-plane-tree.jpg',
     Color.fromARGB(255, 128, 207, 241),
     'London Plane Tree',
     'Found in Park Grabiszyński · Wrocław, PL',
   ),
-  _DemoImage(
+  _DemoImageModel(
     'https://raw.githubusercontent.com/inspirestack/inspire_blur/main/assets/example/images/hibiscus.jpg',
     Color.fromARGB(255, 134, 205, 237),
     'Hibiscus syriacus',
     'Rose of Sharon',
   ),
-  _DemoImage(
+  _DemoImageModel(
     'https://raw.githubusercontent.com/inspirestack/inspire_blur/main/assets/example/images/monkey-puzzle-tree.jpg',
     Color.fromARGB(255, 191, 246, 149),
     'Monkey Puzzle Tree',
@@ -373,13 +365,37 @@ const _demoImages = [
   ),
 ];
 
-class _DemoImage {
+class _DemoImageModel {
   final String url;
   final Color tint;
   final String title;
   final String subtitle;
 
-  const _DemoImage(this.url, this.tint, this.title, this.subtitle);
+  const _DemoImageModel(this.url, this.tint, this.title, this.subtitle);
+}
+
+class _DemoImage extends StatelessWidget {
+  const _DemoImage({required this.imagePath});
+
+  final String imagePath;
+
+  @override
+  Widget build(BuildContext context) {
+    return Image.network(
+      imagePath,
+      fit: BoxFit.cover,
+      errorBuilder: (context, error, stackTrace) => const ColoredBox(
+        color: _colorGrey50,
+        child: Center(
+          child: Text(
+            'Image unavailable',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: _colorBlack),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 // ============================================================================
@@ -388,29 +404,93 @@ class _DemoImage {
 // Not needed for InspireBlur to work. Intended for demo only.
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-void _initializeUi() {
-  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+class _BottomNavigation extends StatelessWidget {
+  const _BottomNavigation({
+    required this.currentPage,
+    required this.onPageChange,
+  });
 
-  SystemChrome.setSystemUIOverlayStyle(
-    SystemUiOverlayStyle.light.copyWith(
-      // Status bar
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.light,
-      systemStatusBarContrastEnforced: false,
+  final int currentPage;
+  final Function(int) onPageChange;
 
-      // Nav bar
-      systemNavigationBarColor: Colors.transparent,
-      systemNavigationBarDividerColor: Colors.transparent,
-      systemNavigationBarIconBrightness: Brightness.light,
-      systemNavigationBarContrastEnforced: false,
-    ),
-  );
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: _colorWhite,
+      child: SafeArea(
+        bottom: true,
+        top: false,
+        child: Row(
+          children: [
+            Expanded(
+              child: _NavButton(
+                title: 'Backdrop blur',
+                isSelected: currentPage == 0,
+                onPressed: () => onPageChange(0),
+              ),
+            ),
+            Expanded(
+              child: _NavButton(
+                title: 'Child blur',
+                isSelected: currentPage == 1,
+                onPressed: () => onPageChange(1),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _NavButton extends StatelessWidget {
+  const _NavButton({
+    required this.title,
+    required this.isSelected,
+    required this.onPressed,
+  });
+
+  final String title;
+  final bool isSelected;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onPressed,
+      child: Container(
+        height: 68,
+        color: _colorWhite,
+        child: Center(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(21),
+              color: isSelected
+                  ? const Color.fromARGB(255, 235, 248, 255)
+                  : _colorTransparent,
+            ),
+            child: Text(
+              title,
+              style: TextStyle(
+                color: isSelected
+                    ? const Color.fromARGB(255, 20, 160, 255)
+                    : const Color.fromARGB(255, 105, 195, 255),
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _ClickableContainer extends StatefulWidget {
-  final Widget Function(double) builder;
-
   const _ClickableContainer({required this.builder});
+
+  final Widget Function(double) builder;
 
   @override
   State<_ClickableContainer> createState() => _ClickableContainerState();
@@ -424,6 +504,7 @@ class _ClickableContainerState extends State<_ClickableContainer>
   @override
   void initState() {
     super.initState();
+
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 350),
@@ -459,3 +540,8 @@ class _ClickableContainerState extends State<_ClickableContainer>
   void _startAnimation() => _controller.forward();
   void _endAnimation() => _controller.reverse();
 }
+
+const _colorTransparent = Color(0x00000000);
+const _colorBlack = Color(0xFF000000);
+const _colorWhite = Color(0xFFFFFFFF);
+const _colorGrey50 = Color(0xFFFAFAFA);

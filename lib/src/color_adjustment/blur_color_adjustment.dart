@@ -2,20 +2,25 @@ import 'dart:math';
 import 'dart:ui' show lerpDouble;
 
 import 'package:inspire_blur/src/utils/extensions/inspire_double_extensions.dart';
+import 'package:inspire_blur/src/utils/math/math_utils.dart';
 
 /// Adjusts the color of the blurred effect.
 ///
 /// The adjustment parameters allow all positive and negative values by default,
 /// unless specified otherwise.
 ///
+/// ## Perceptual scale
+///
+/// Applies to: [brightness], [contrast], [exposure].
+///
 /// The values follow a perceptual scale where each 10x increase in magnitude
 /// represents roughly one additional level of perceived effect strength.
 ///
-/// | Magnitude | Perceived effect |
-/// |----------:|------------------|
-/// | `0.1`     | Subtle           |
-/// | `1.0`     | Noticeable       |
-/// | `10.0`    | Extreme          |
+/// | Magnitude    | Perceived effect |
+/// |-------------:|------------------|
+/// | `0.1 - 1.0`  | Subtle           |
+/// | `1.0 - 10.0` | Noticeable       |
+/// | `> 10.0`     | Extreme          |
 ///
 /// The scale applies for both positive and negative values, unless
 /// specified otherwise.
@@ -23,12 +28,27 @@ import 'package:inspire_blur/src/utils/extensions/inspire_double_extensions.dart
 /// Value `0.0` is the default where no adjustment is applied.
 ///
 /// **Example values:**
-/// * `0.1` - quite subtle
-/// * `0.5` - moderate
+/// * `0.25` - barely noticeable
+/// * `0.5` - subtle
 /// * `1.0` - clearly noticeable
 /// * `2.0-4.0` - more pronounced
 /// * `5.0-10.0` - very strong
-/// * `> 10.0` - typically extreme
+/// * `> 10.0` - extreme
+///
+/// ## Saturation perceptual scale
+///
+/// Applies to: [saturation] and [vibrance].
+///
+/// **Example values:**
+/// * `0.1` - barely noticeable
+/// * `0.2` - subtle
+/// * `0.3-0.4` - more pronounced
+/// * `0.5-1.0` - very strong
+/// * `> 1.0` - extreme
+///
+/// Value `0.0` is the default where no adjustment is applied.
+/// The lower bound is `-1.0` where effect negative strength is maximal.
+/// Positive values are not bounded.
 class BlurColorAdjustment {
   /// Brightness adjustment.
   ///
@@ -39,9 +59,9 @@ class BlurColorAdjustment {
   ///
   /// For internal use only.
   double get shaderBrightness =>
-      brightness.sign * _brightnessFactor * sqrt(brightness.abs());
+      _perceptualScale(x: brightness, factor: _brightnessFactor);
 
-  static const _brightnessFactor = 0.03;
+  static const _brightnessFactor = 0.075;
 
   /// Contrast adjustment.
   ///
@@ -52,7 +72,10 @@ class BlurColorAdjustment {
   ///
   /// For internal use only.
   double get shaderContrast {
-    if (contrast >= 0.0) return 1.0 + _positiveContrastFactor * sqrt(contrast);
+    if (contrast >= 0.0) {
+      return 1.0 +
+          _perceptualScale(x: contrast, factor: _positiveContrastFactor);
+    }
 
     final scaledContrast = contrast * _negativeContrastFactor;
     return 1.0 + scaledContrast / (1.0 + scaledContrast.abs());
@@ -71,10 +94,13 @@ class BlurColorAdjustment {
   /// Exposure value converted into a shader scale.
   ///
   /// For internal use only.
-  double get shaderExposure =>
-      exposure.sign * _exposureFactor * sqrt(exposure.abs());
+  double get shaderExposure => _perceptualScale(
+      x: exposure,
+      factor:
+          exposure > 0.0 ? _positiveExposureFactor : _negativeExposureFactor);
 
-  static const _exposureFactor = 0.08;
+  static const _positiveExposureFactor = 0.1;
+  static const _negativeExposureFactor = 0.2;
 
   /// Saturation adjustment.
   ///
@@ -94,10 +120,11 @@ class BlurColorAdjustment {
       return (1.0 + saturation).coerceAtLeast(0.0);
     }
 
-    return 1.0 + _positiveSaturationFactor * sqrt(saturation);
+    return 1.0 +
+        _perceptualScale(x: saturation, factor: _positiveSaturationFactor);
   }
 
-  static const _positiveSaturationFactor = 0.25;
+  static const _positiveSaturationFactor = 2.0;
 
   /// Vibrance adjustment.
   ///
@@ -105,7 +132,7 @@ class BlurColorAdjustment {
   ///
   /// * `0.0` - original vibrance.
   /// * `-1.0` - minimal vibrance.
-  /// * Values below `-1.0` are treated as the minimal vibrance.
+  /// * Values below `-1.0` are treated as the strongest vibrance reduction.
   /// * Positive values progressively increase vibrance.
   final double vibrance;
 
@@ -117,10 +144,34 @@ class BlurColorAdjustment {
       return vibrance.coerceAtLeast(-1.0);
     }
 
-    return _positiveVibranceFactor * sqrt(vibrance);
+    return _perceptualScale(x: vibrance, factor: _positiveVibranceFactor);
   }
 
-  static const _positiveVibranceFactor = 0.5;
+  static const _positiveVibranceFactor = 3.0;
+
+  /// Maps a linear value to a perceptually smoother scale.
+  ///
+  /// Near zero the `asinh` produces a smooth, linear response. Its derivative
+  /// at zero is `1.0`, allowing the values to pass through the zero mid-point
+  /// with no perceived slowdown or discontinuity.
+  ///
+  /// As the magnitude increases, the mapping gradually transitions toward
+  /// a square root response. It compresses larger values while keeping
+  /// the value range unbounded.
+  ///
+  /// Both mapping functions are interpolated gradually. The resulting
+  /// perceptual scale makes animations feel fluid and responsive.
+  double _perceptualScale({required double x, required double factor}) {
+    final blend = (x.abs() * _asinhToSqrtProgressionFactor).clamp(0.0, 1.0);
+
+    return lerpDouble(
+      0.5 * factor * asinh(x),
+      x.sign * factor * sqrt(x.abs()),
+      blend,
+    )!;
+  }
+
+  static const _asinhToSqrtProgressionFactor = 0.1;
 
   /// Controls how strongly color adjustments affect the blurred area.
   ///

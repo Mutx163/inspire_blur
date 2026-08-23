@@ -1,13 +1,18 @@
 import 'dart:ui' as ui;
 
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 import 'package:inspire_blur/src/color_adjustment/blur_color_adjustment.dart';
+import 'package:inspire_blur/src/distribution/distribution_image.dart';
 import 'package:inspire_blur/src/inspire_blur_config.dart';
 import 'package:inspire_blur/src/inspire_blur_wrapper.dart';
 import 'package:inspire_blur/src/inspire_child_blur.dart';
 import 'package:inspire_blur/src/inspire_shaders.dart';
+import 'package:inspire_blur/src/model/aspect_ratio_correction.dart';
+import 'package:inspire_blur/src/model/inspire_blur_widget_type.dart';
 import 'package:inspire_blur/src/transform/blur_transform.dart';
 import 'package:inspire_blur/src/utils/extensions/inspire_geometry_extensions.dart';
+import 'package:inspire_blur/src/utils/inspire_colors.dart';
+import 'package:inspire_blur/src/utils/inspire_shader_utils.dart';
 
 /// Applies a blur effect to the content behind this widget.
 ///
@@ -17,6 +22,23 @@ import 'package:inspire_blur/src/utils/extensions/inspire_geometry_extensions.da
 /// Typically used inside a [Stack], positioned above the content that
 /// should be blurred.
 class InspireBackdropBlur extends StatelessWidget {
+  /// Creates a backdrop blur.
+  ///
+  /// Blur effect visual properties are specified in the [config].
+  ///
+  /// An optional [child] may be used, mainly for sizing.
+  ///
+  /// For performance and stability adjustments, refer to documentation of the
+  /// [clipBehavior] and [useRepaintBoundary].
+  const InspireBackdropBlur({
+    super.key,
+    required this.config,
+    this.clipBehavior = Clip.antiAlias,
+    this.useRepaintBoundary = true,
+    this.layoutInvalidationKey,
+    this.child,
+  });
+
   /// Configuration of the backdrop blur.
   ///
   /// Specifies the strength and spatial distribution of the blur effect.
@@ -61,23 +83,6 @@ class InspireBackdropBlur extends StatelessWidget {
   /// such as [SizedBox] or [Positioned].
   final Widget? child;
 
-  /// Creates a backdrop blur.
-  ///
-  /// Blur effect visual properties are specified in the [config].
-  ///
-  /// An optional [child] may be used, mainly for sizing.
-  ///
-  /// For performance and stability adjustments, refer to documentation of the
-  /// [clipBehavior] and [useRepaintBoundary].
-  const InspireBackdropBlur({
-    super.key,
-    required this.config,
-    this.clipBehavior = Clip.antiAlias,
-    this.useRepaintBoundary = true,
-    this.layoutInvalidationKey,
-    this.child,
-  });
-
   @override
   Widget build(BuildContext context) {
     if (!ui.ImageFilter.isShaderFilterSupported) {
@@ -89,19 +94,25 @@ class InspireBackdropBlur extends StatelessWidget {
 
     return InspireBlurWrapper(
       config: config,
+      widgetType: InspireBlurWidgetType.backdrop,
       layoutInvalidationKey: layoutInvalidationKey,
       builder: (context, builderData) {
-        final gradientMap = builderData.blurGradientMap;
+        final blurDistributionImage = builderData.blurDistributionImage;
         final globalBounds = builderData.globalBounds;
 
         // Dependencies are not ready yet — skip a frame with no blur.
-        // Typically it should not happen, unless device is slow.
-        if (gradientMap == null || globalBounds == null) {
+        // Typically it should not happen.
+        if (blurDistributionImage == null || globalBounds == null) {
           return const SizedBox.shrink();
         }
 
         final sigmaHorizontal = config.effectiveSigmaX;
         final sigmaVertical = config.effectiveSigmaY;
+
+        final aspectRatioCorrection = AspectRatioCorrection.forDistribution(
+          distribution: config.blurDistribution,
+          bounds: globalBounds,
+        );
 
         if (sigmaHorizontal != null &&
             sigmaVertical != null &&
@@ -113,9 +124,10 @@ class InspireBackdropBlur extends StatelessWidget {
                 children: [
                   Positioned.fill(
                     child: _InspireBackdropBlurPass(
-                      gradientMap: gradientMap,
+                      blurDistributionImage: blurDistributionImage,
                       transform: config.transform,
                       colorAdjustment: config.colorAdjustment.disabled(),
+                      aspectRatioCorrection: aspectRatioCorrection,
                       globalBounds: globalBounds,
                       direction: Axis.horizontal,
                       sigma: sigmaHorizontal,
@@ -123,9 +135,10 @@ class InspireBackdropBlur extends StatelessWidget {
                   ),
                   Positioned.fill(
                     child: _InspireBackdropBlurPass(
-                      gradientMap: gradientMap,
+                      blurDistributionImage: blurDistributionImage,
                       transform: config.transform,
                       colorAdjustment: config.colorAdjustment,
+                      aspectRatioCorrection: aspectRatioCorrection,
                       globalBounds: globalBounds,
                       direction: Axis.vertical,
                       sigma: sigmaVertical,
@@ -142,9 +155,10 @@ class InspireBackdropBlur extends StatelessWidget {
           return _wrapWithClipRect(
             child: _maybeWrapWithRepaintBoundary(
               child: _InspireBackdropBlurPass(
-                gradientMap: gradientMap,
+                blurDistributionImage: blurDistributionImage,
                 transform: config.transform,
                 colorAdjustment: config.colorAdjustment,
+                aspectRatioCorrection: aspectRatioCorrection,
                 globalBounds: globalBounds,
                 direction: Axis.horizontal,
                 sigma: sigmaHorizontal,
@@ -162,9 +176,10 @@ class InspireBackdropBlur extends StatelessWidget {
           return _wrapWithClipRect(
             child: _maybeWrapWithRepaintBoundary(
               child: _InspireBackdropBlurPass(
-                gradientMap: gradientMap,
+                blurDistributionImage: blurDistributionImage,
                 transform: config.transform,
                 colorAdjustment: config.colorAdjustment,
+                aspectRatioCorrection: aspectRatioCorrection,
                 globalBounds: globalBounds,
                 direction: Axis.vertical,
                 sigma: sigmaVertical ?? 0.0,
@@ -193,18 +208,20 @@ class InspireBackdropBlur extends StatelessWidget {
 }
 
 class _InspireBackdropBlurPass extends StatefulWidget {
-  final ui.Image gradientMap;
+  final DistributionImage blurDistributionImage;
   final BlurTransform transform;
   final BlurColorAdjustment colorAdjustment;
+  final AspectRatioCorrection aspectRatioCorrection;
   final Rect globalBounds;
   final Axis direction;
   final double sigma;
   final Widget? child;
 
   const _InspireBackdropBlurPass({
-    required this.gradientMap,
+    required this.blurDistributionImage,
     required this.transform,
     required this.colorAdjustment,
+    required this.aspectRatioCorrection,
     required this.globalBounds,
     required this.direction,
     required this.sigma,
@@ -251,7 +268,11 @@ class _InspireBackdropBlurPassState extends State<_InspireBackdropBlurPass> {
 
     final normalizedOrigin = widget.transform.origin.toNormalizedOffset();
 
-    _shader?.setImageSampler(1, widget.gradientMap);
+    _shader?.setImageSampler(
+      1,
+      widget.blurDistributionImage.image,
+      filterQuality: kShaderMapSamplingQuality,
+    );
     _shader?.setFloat(2, widget.sigma);
     _shader?.setFloat(3, widget.direction == Axis.horizontal ? 1.0 : 0.0);
     _shader?.setFloat(4, widget.direction == Axis.vertical ? 1.0 : 0.0);
@@ -274,6 +295,7 @@ class _InspireBackdropBlurPassState extends State<_InspireBackdropBlurPass> {
     _shader?.setFloat(21, widget.colorAdjustment.shaderVibrance);
     _shader?.setFloat(22, widget.colorAdjustment.blurAdjustmentStrength);
     _shader?.setFloat(23, widget.colorAdjustment.nonBlurAdjustmentStrength);
+    _shader?.setFloat(24, widget.aspectRatioCorrection.shaderAspectRatio);
   }
 
   @override
@@ -296,7 +318,7 @@ class _InspireBackdropBlurPassState extends State<_InspireBackdropBlurPass> {
       // inside, and thus it should not collapse the backdrop filter area.
       child: widget.child ??
           const ColoredBox(
-            color: Colors.transparent,
+            color: InspireColors.transparent,
             child: SizedBox.expand(),
           ),
     );
