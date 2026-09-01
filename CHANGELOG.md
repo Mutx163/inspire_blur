@@ -43,6 +43,16 @@
 - **Dependency cleanup**
   - Removed all underlying dependencies on Flutter's Material and Cupertino libraries. (Thanks @Azzeccagarbugli!)
 
+## 0.4.1
+
+### Fixed
+
+- **Incorrect Y-orientation on Flutter 3.47**
+  - Migrated shaders to accommodate the Flutter breaking change where OpenGL ES render-to-texture content is now stored top-down.
+  - Backwards compatible with earlier Flutter versions.
+  - Applied to both child and backdrop blur.
+  - Thanks to @proninyaroslav and others for reporting and investigating this issue!
+
 ## 0.4.0
 
 ### Added
