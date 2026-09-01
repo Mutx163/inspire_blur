@@ -165,9 +165,9 @@ void main() {
 
   vec2 texel = 1.0 / u_size;
 
-  #ifdef IMPELLER_TARGET_OPENGLES
+#if defined(IMPELLER_TARGET_OPENGLES) && !defined(IMPELLER_OPENGLES_UNFLIPPED_DEPRECATED)
     uv.y = 1.0 - uv.y;
-  #endif
+#endif
 
   vec4 bg = texture(u_texture, uv);
   float blurFactor = texture(u_blur_texture, uv_blur).r;

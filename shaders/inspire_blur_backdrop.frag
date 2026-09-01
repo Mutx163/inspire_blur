@@ -166,7 +166,7 @@ void main() {
   vec2 areaTopLeftUV = u_area_origin / u_size;
   vec2 areaBottomRightUV = (u_area_origin + u_area_size) / u_size;
 
-#ifdef IMPELLER_TARGET_OPENGLES
+#if defined(IMPELLER_TARGET_OPENGLES) && !defined(IMPELLER_OPENGLES_UNFLIPPED_DEPRECATED)
   // 1. Flip the sampling UV
   uv.y = 1.0 - uv.y;
 
@@ -182,7 +182,7 @@ void main() {
   vec2 areaUV = (uv - areaTopLeftUV) / (areaBottomRightUV - areaTopLeftUV);
   areaUV = clamp(areaUV, vec2(0.0), vec2(1.0));
 
-#ifdef IMPELLER_TARGET_OPENGLES
+#if defined(IMPELLER_TARGET_OPENGLES) && !defined(IMPELLER_OPENGLES_UNFLIPPED_DEPRECATED)
   areaUV.y = 1.0 - areaUV.y;
 #endif
 
