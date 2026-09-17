@@ -121,12 +121,12 @@ class _InspireBlurWrapperState extends State<InspireBlurWrapper> {
   Future<void> _createNewBlurGradientMap(int size) async {
     final gen = ++_blurGradientMapGeneration;
 
-    final distributionMap = widget.config.distribution.toDistributionMap(
-      size: size,
-    );
-
-    final newBlurDistributionImage =
-        await distributionMap.getBlurDistributionImage();
+    // mikcb patch (perf): 走带像素缓存的入口。分布图像素只取决于
+    // (distribution, size)，上游却每次挂载都重算（真机实测 674k 次求值 +
+    // 2.7MB，同步占 UI 线程 36~49ms）。图像本身仍是本次 `owned` 的，
+    // 下面这段释放逻辑与上游逐字一致。
+    final newBlurDistributionImage = await widget.config.distribution
+        .toDistributionImage(size: size);
 
     if (_disposed || gen != _blurGradientMapGeneration) {
       newBlurDistributionImage.dispose();
