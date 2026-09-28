@@ -9,6 +9,8 @@ part 'package:inspire_blur/src/distribution/models/directional_distribution.dart
 part 'package:inspire_blur/src/distribution/models/ellipse_distribution.dart';
 part 'package:inspire_blur/src/distribution/models/gradient_distribution.dart';
 part 'package:inspire_blur/src/distribution/models/image_mask_distribution.dart';
+// mikcb patch (2026-09-28): 两个方向渐变的乘积。见 ProductDistribution 的类注释。
+part 'package:inspire_blur/src/distribution/models/product_distribution.dart';
 part 'package:inspire_blur/src/distribution/models/rrect_distribution.dart';
 part 'package:inspire_blur/src/distribution/models/uniform_distribution.dart';
 

@@ -481,6 +481,31 @@ class InspireBlurConfig {
     );
   }
 
+  /// Blur with the **product** of two directional gradients.
+  ///
+  /// Use this when the shape needs to be full strength along one axis while
+  /// fading along the other — the bottom sheet's top band being the case that
+  /// motivated it (full strength on the panel's top edge, zero across the
+  /// panel's two top corners). See [ProductDistribution].
+  factory InspireBlurConfig.product({
+    required DirectionalDistribution first,
+    required DirectionalDistribution second,
+    double? sigma,
+    double? sigmaX,
+    double? sigmaY,
+    BlurTransform transform = const BlurTransform(),
+    BlurColorAdjustment colorAdjustment = const BlurColorAdjustment(),
+  }) {
+    return InspireBlurConfig(
+      sigma: sigma,
+      sigmaX: sigmaX,
+      sigmaY: sigmaY,
+      distribution: ProductDistribution(first: first, second: second),
+      transform: transform,
+      colorAdjustment: colorAdjustment,
+    );
+  }
+
   /// Blur with a constant strength across the whole widget area.
   factory InspireBlurConfig.solid({
     double? sigma,

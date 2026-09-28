@@ -7,6 +7,7 @@ import 'package:inspire_blur/src/distribution/blur_distribution_image.dart';
 import 'package:inspire_blur/src/distribution/maps/directional_distribution_map.dart';
 import 'package:inspire_blur/src/distribution/maps/ellipse_distribution_map.dart';
 import 'package:inspire_blur/src/distribution/maps/image_mask_distribution_map.dart';
+import 'package:inspire_blur/src/distribution/maps/product_distribution_map.dart';
 import 'package:inspire_blur/src/distribution/maps/rrect_distribution_map.dart';
 import 'package:inspire_blur/src/distribution/maps/uniform_distribution_map.dart';
 
@@ -126,6 +127,27 @@ extension BlurDistributionExtension on BlurDistribution {
             width: e.maskImage.width,
             height: e.maskImage.height,
             maskImage: e.maskImage,
+          ),
+        // mikcb patch (2026-09-28): 两个方向渐变的乘积。
+        ProductDistribution e => ProductDistributionMap(
+            width: size,
+            height: size,
+            first: DirectionalDistributionMap(
+              width: size,
+              height: size,
+              begin: e.first.begin,
+              end: e.first.end,
+              values: e.first.values,
+              stops: e.first.stops,
+            ),
+            second: DirectionalDistributionMap(
+              width: size,
+              height: size,
+              begin: e.second.begin,
+              end: e.second.end,
+              values: e.second.values,
+              stops: e.second.stops,
+            ),
           ),
       };
 
