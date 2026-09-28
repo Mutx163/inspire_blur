@@ -18,15 +18,19 @@ export 'src/distribution/blur_distribution.dart';
 // 名字就不存在，`test/architecture/inspire_blur_patch_test.dart` 会直接编译失败
 // （比读 pubspec 字符串更能挡住「悄悄回退」）。上游修好后连同补丁一起删。
 //
-// 2026-09-28 追加：把 [BlurDistributionExtension] / [BlurDistributionMap] 一并导出，
-// 同一个理由 —— 形状补丁（ProductDistribution）的守卫测试要经
-// `toDistributionMap()` 把分布烤成强度图、逐点断言「两个方向相乘」。只放缓存类的话
-// 那个测试就得 import `package:inspire_blur/src/...`，撞 `implementation_imports`。
+// 2026-09-28 追加：把 [BlurDistributionExtension] / [BlurDistributionMap] /
+// [IntensityBasedDistributionMap] 一并导出，同一个理由 —— 形状补丁
+//（ProductDistribution）的守卫测试要经 `toDistributionMap()` 拿到分布图、再用
+// `intensityAt(u, v)` 逐点断言「两个方向相乘」。只放缓存类的话那个测试就得
+// import `package:inspire_blur/src/...`，撞 `implementation_imports`。
+// 注意 [IntensityBasedDistributionMap] 才是声明 `intensityAt` 的那个基类：
+// `toDistributionMap()` 的静态返回类型是它的父类 [BlurDistributionMap]。
 export 'src/distribution/blur_distribution_map.dart'
     show
         BlurDistributionExtension,
         BlurDistributionMap,
-        BlurDistributionPixelsCache;
+        BlurDistributionPixelsCache,
+        IntensityBasedDistributionMap;
 export 'src/inspire_backdrop_blur.dart' show InspireBackdropBlur;
 export 'src/inspire_blur.dart' show Inspire;
 export 'src/inspire_blur_config.dart' show InspireBlurConfig;
