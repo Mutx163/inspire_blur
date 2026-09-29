@@ -249,9 +249,29 @@ class _InspireBackdropBlurPassState extends State<_InspireBackdropBlurPass> {
   void _updateShader() {
     final dpr = MediaQuery.of(context).devicePixelRatio;
 
+    // mikcb patch 3 (fix, 2026-09-29): u_size 从未被设置 —— 上游 bug。
+    //
+    // 着色器里 `uv = FlutterFragCoord() / u_size` 把像素位置换算成整块画布的
+    // 归一化坐标，`u_area_origin/size` 也按同一空间解释；u_size 恒为 (0,0) 时
+    // uv 与 areaUV 全部退化（Inf/NaN，clamp 后塌到 (0,0)），强度图实际只采样
+    // **左上角那一个点的值**，且全程恒定：
+    //
+    // * 单向渐变分布（顶栏渐进模糊，本库迄今唯一的生产用法）：map(0,0) = 1
+    //   → 恒满强度 —— **碰巧接近正确**，bug 被掩盖（grad 顶部渐弱形其实从未
+    //   真正生效过，只是衬底渐变掩盖了观感差异）；
+    // * 两个方向的乘积分布（底部弹窗顶部渐变带）：map(0,0) = 1 × 0 = 0
+    //   → **恒零强度，模糊整条死掉**，只剩衬底白纱（真机口径「渐变模糊变成
+    //   透明的，只剩顶部一层白雾」，2026-09-29 定位）。
+    //
+    // 修法：显式给 u_size = 物理屏幕尺寸。FlutterFragCoord() 在非 GLES 目标
+    // 上的 Y 翻转（`u_size.y - y`）也依赖它，一并修正。u_area 传的是
+    // globalBounds × dpr（物理、屏幕绝对），同一空间，两处从此自洽。
+    final size = MediaQuery.of(context).size * dpr;
     final normalizedOrigin = widget.transform.origin.toNormalizedOffset();
 
     _shader?.setImageSampler(1, widget.gradientMap);
+    _shader?.setFloat(0, size.width);
+    _shader?.setFloat(1, size.height);
     _shader?.setFloat(2, widget.sigma);
     _shader?.setFloat(3, widget.direction == Axis.horizontal ? 1.0 : 0.0);
     _shader?.setFloat(4, widget.direction == Axis.vertical ? 1.0 : 0.0);
