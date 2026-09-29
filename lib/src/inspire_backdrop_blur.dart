@@ -97,8 +97,19 @@ class InspireBackdropBlur extends StatelessWidget {
         // Dependencies are not ready yet — skip a frame with no blur.
         // Typically it should not happen, unless device is slow.
         if (gradientMap == null || globalBounds == null) {
+          // ⚠️ 临时探针（2026-09-29 开窗无模糊排查，定位后删除）
+          // ignore: avoid_print
+          print('blur-probe: blur层缺数据 map≠null=${gradientMap != null} '
+              'bounds≠null=${globalBounds != null}');
           return const SizedBox.shrink();
         }
+
+        // ⚠️ 临时探针（2026-09-29 开窗无模糊排查，定位后删除）
+        // ignore: avoid_print
+        print('blur-probe: wrapper出pass bounds=$globalBounds '
+            'mapSize=${gradientMap.width}x${gradientMap.height} '
+            'sigmaH=${config.effectiveSigmaX} sigmaV=${config.effectiveSigmaY} '
+            'corner=${config.topCornerRadius}');
 
         final sigmaHorizontal = config.effectiveSigmaX;
         final sigmaVertical = config.effectiveSigmaY;
@@ -305,6 +316,15 @@ class _InspireBackdropBlurPassState extends State<_InspireBackdropBlurPass> {
     _shader?.setFloat(23, widget.colorAdjustment.nonBlurAdjustmentStrength);
     // mikcb patch 5：顶角圆弧半径（逻辑 → 物理，SDF 在等比空间里算）。
     _shader?.setFloat(24, widget.topCornerRadius * dpr);
+    // ⚠️ 临时探针（2026-09-29 开窗无模糊排查，定位后删除）
+    // ignore: avoid_print
+    print('blur-probe: updateShader dir=${widget.direction} '
+        'areaPx=LTRB(${(widget.globalBounds.left * dpr).toStringAsFixed(1)}, '
+        '${(widget.globalBounds.top * dpr).toStringAsFixed(1)}, '
+        '${(widget.globalBounds.right * dpr).toStringAsFixed(1)}, '
+        '${(widget.globalBounds.bottom * dpr).toStringAsFixed(1)}) '
+        'sigma=${widget.sigma} cornerPx=${(widget.topCornerRadius * dpr).toStringAsFixed(1)} '
+        'dpr=$dpr');
   }
 
   @override
@@ -316,6 +336,10 @@ class _InspireBackdropBlurPassState extends State<_InspireBackdropBlurPass> {
   @override
   Widget build(BuildContext context) {
     final shader = _shader;
+    // ⚠️ 临时探针（2026-09-29 开窗无模糊排查，定位后删除）
+    // ignore: avoid_print
+    print('blur-probe: pass build shader=${shader != null} dir=${widget.direction} '
+        'bounds=${widget.globalBounds}');
     if (shader == null) {
       return widget.child ?? const SizedBox.shrink();
     }
