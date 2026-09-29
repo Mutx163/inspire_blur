@@ -179,8 +179,21 @@ void main() {
   areaBottomRightUV.y = tempBottom;
 #endif
 
-  vec2 areaUV = (uv - areaTopLeftUV) / (areaBottomRightUV - areaTopLeftUV);
-  areaUV = clamp(areaUV, vec2(0.0), vec2(1.0));
+  vec2 areaUVraw = (uv - areaTopLeftUV) / (areaBottomRightUV - areaTopLeftUV);
+  vec2 areaUV = clamp(areaUVraw, vec2(0.0), vec2(1.0));
+
+  // mikcb patch 4 (fix, 2026-09-29): 材料矩形外一律输出透明。
+  //
+  // 本来效果区域 = 部件边界 = u_area，矩形外根本不会被画到；但宿主引擎对
+  // BackdropFilter 的裁剪并不总是可靠（真机实测：底部弹窗顶部渐变带在有内容
+  // 滚到带子底下时，效果越出面板圆角，在角外的方形区域留下亮色填充 —— 用户
+  // 口径「圆角外面会出现东西，顶部/底部滚动时又是正常圆角」）。clamp 会把
+  // 矩形外的像素塌到矩形边上、按边上强度继续输出，越界内容因此显形。
+  // 这里用 clamp 前的原始 areaUV 判定内外，矩形外强制 alpha=0：矩形内逐像素
+  // 不变（insideArea 恒 1），矩形外从「画出未模糊/半模糊的底图」变成「什么都不
+  // 画」，宿主裁剪再怎么丢也只会漏出一无所有。
+  float insideArea = step(0.0, areaUVraw.x) * step(areaUVraw.x, 1.0)
+      * step(0.0, areaUVraw.y) * step(areaUVraw.y, 1.0);
 
 #if defined(IMPELLER_TARGET_OPENGLES) && !defined(IMPELLER_OPENGLES_UNFLIPPED_DEPRECATED)
   areaUV.y = 1.0 - areaUV.y;
@@ -204,9 +217,9 @@ void main() {
       u_color_adjustment_non_blur_strength > 0.0 ||
       u_color_adjustment_blur_strength > 0.0
     ) {
-      frag_color = applyColorAdjustments(bg, 0.0);
+      frag_color = applyColorAdjustments(bg, 0.0) * insideArea;
     } else {
-      frag_color = bg;
+      frag_color = bg * insideArea;
     }
     return;
   }
@@ -269,4 +282,6 @@ void main() {
   ) {
     frag_color = applyColorAdjustments(frag_color, blurFactor);
   }
+
+  frag_color *= insideArea;
 }
