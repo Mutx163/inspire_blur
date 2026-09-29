@@ -97,6 +97,10 @@ class InspireBackdropBlur extends StatelessWidget {
         // Dependencies are not ready yet — skip a frame with no blur.
         // Typically it should not happen, unless device is slow.
         if (gradientMap == null || globalBounds == null) {
+          // ⚠️ 临时诊断（2026-09-29 分布图加载链路排查，定位后删除）
+          // ignore: avoid_print
+          print('inspire-probe: blur层缺数据 '
+              'map≠null=${gradientMap != null} bounds≠null=${globalBounds != null}');
           return const SizedBox.shrink();
         }
 
@@ -219,6 +223,9 @@ class _InspireBackdropBlurPass extends StatefulWidget {
 class _InspireBackdropBlurPassState extends State<_InspireBackdropBlurPass> {
   ui.FragmentShader? _shader;
 
+  // ⚠️ 临时诊断（2026-09-29 分布图加载链路排查，定位后删除）
+  bool _probeRendered = false;
+
   @override
   void initState() {
     super.initState();
@@ -305,7 +312,19 @@ class _InspireBackdropBlurPassState extends State<_InspireBackdropBlurPass> {
   @override
   Widget build(BuildContext context) {
     final shader = _shader;
-    if (shader == null) return widget.child ?? const SizedBox.shrink();
+    if (shader == null) {
+      // ⚠️ 临时诊断（2026-09-29，定位后删除）
+      // ignore: avoid_print
+      print('inspire-probe: 模糊趟等待着色器程序');
+      return widget.child ?? const SizedBox.shrink();
+    }
+    if (!_probeRendered) {
+      _probeRendered = true;
+      // ⚠️ 临时诊断（2026-09-29，定位后删除）
+      // ignore: avoid_print
+      print('inspire-probe: 模糊趟首次渲染 sigma=${widget.sigma} '
+          'area=${widget.globalBounds}');
+    }
 
     return BackdropFilter(
       filter: ui.ImageFilter.shader(shader),

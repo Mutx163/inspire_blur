@@ -81,6 +81,10 @@ class _InspireBlurWrapperState extends State<InspireBlurWrapper> {
     super.didUpdateWidget(oldWidget);
 
     if (oldWidget.config.distribution != widget.config.distribution) {
+      // ⚠️ 临时诊断（2026-09-29 分布图加载链路排查，定位后删除）
+      // ignore: avoid_print
+      print('inspire-probe: didUpdateWidget → 分布变化，强制重生成 '
+          'old=${oldWidget.config.distribution} new=${widget.config.distribution}');
       _regenerateBlurGradientMapIfNeeded(force: true);
     }
   }
@@ -121,6 +125,12 @@ class _InspireBlurWrapperState extends State<InspireBlurWrapper> {
   Future<void> _createNewBlurGradientMap(int size) async {
     final gen = ++_blurGradientMapGeneration;
 
+    // ⚠️ 临时诊断（2026-09-29 分布图加载链路排查，定位后删除）
+    // ignore: avoid_print
+    print('inspire-probe: gen#$gen 开始生成 size=$size '
+        'wrapper=${identityHashCode(this)} '
+        'distribution=${widget.config.distribution}');
+
     // mikcb patch (perf): 走带像素缓存的入口。分布图像素只取决于
     // (distribution, size)，上游却每次挂载都重算（真机实测 674k 次求值 +
     // 2.7MB，同步占 UI 线程 36~49ms）。图像本身仍是本次 `owned` 的，
@@ -129,9 +139,17 @@ class _InspireBlurWrapperState extends State<InspireBlurWrapper> {
         .toDistributionImage(size: size);
 
     if (_disposed || gen != _blurGradientMapGeneration) {
+      // ⚠️ 临时诊断（2026-09-29，定位后删除）
+      // ignore: avoid_print
+      print('inspire-probe: gen#$gen 生成完成但被作废（当前=$_blurGradientMapGeneration'
+          ' disposed=$_disposed）');
       newBlurDistributionImage.dispose();
       return;
     }
+
+    // ⚠️ 临时诊断（2026-09-29，定位后删除）
+    // ignore: avoid_print
+    print('inspire-probe: gen#$gen 生成完成并挂上（耗至此刻）');
 
     _blurDistributionImage?.dispose();
 
