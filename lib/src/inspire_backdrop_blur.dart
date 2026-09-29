@@ -97,10 +97,6 @@ class InspireBackdropBlur extends StatelessWidget {
         // Dependencies are not ready yet — skip a frame with no blur.
         // Typically it should not happen, unless device is slow.
         if (gradientMap == null || globalBounds == null) {
-          // ⚠️ 临时诊断（2026-09-29 分布图加载链路排查，定位后删除）
-          // ignore: avoid_print
-          print('inspire-probe: blur层缺数据 '
-              'map≠null=${gradientMap != null} bounds≠null=${globalBounds != null}');
           return const SizedBox.shrink();
         }
 
@@ -123,6 +119,7 @@ class InspireBackdropBlur extends StatelessWidget {
                       globalBounds: globalBounds,
                       direction: Axis.horizontal,
                       sigma: sigmaHorizontal,
+                      topCornerRadius: config.topCornerRadius,
                     ),
                   ),
                   Positioned.fill(
@@ -133,6 +130,7 @@ class InspireBackdropBlur extends StatelessWidget {
                       globalBounds: globalBounds,
                       direction: Axis.vertical,
                       sigma: sigmaVertical,
+                      topCornerRadius: config.topCornerRadius,
                     ),
                   ),
                   if (childValue != null) childValue,
@@ -152,6 +150,7 @@ class InspireBackdropBlur extends StatelessWidget {
                 globalBounds: globalBounds,
                 direction: Axis.horizontal,
                 sigma: sigmaHorizontal,
+                topCornerRadius: config.topCornerRadius,
                 child: childValue,
               ),
             ),
@@ -172,6 +171,7 @@ class InspireBackdropBlur extends StatelessWidget {
                 globalBounds: globalBounds,
                 direction: Axis.vertical,
                 sigma: sigmaVertical ?? 0.0,
+                topCornerRadius: config.topCornerRadius,
                 child: childValue,
               ),
             ),
@@ -203,6 +203,10 @@ class _InspireBackdropBlurPass extends StatefulWidget {
   final Rect globalBounds;
   final Axis direction;
   final double sigma;
+
+  /// mikcb patch 5：材料形状两个上角的圆弧半径（逻辑 px，0 = 关）。
+  final double topCornerRadius;
+
   final Widget? child;
 
   const _InspireBackdropBlurPass({
@@ -212,6 +216,7 @@ class _InspireBackdropBlurPass extends StatefulWidget {
     required this.globalBounds,
     required this.direction,
     required this.sigma,
+    required this.topCornerRadius,
     this.child,
   });
 
@@ -222,9 +227,6 @@ class _InspireBackdropBlurPass extends StatefulWidget {
 
 class _InspireBackdropBlurPassState extends State<_InspireBackdropBlurPass> {
   ui.FragmentShader? _shader;
-
-  // ⚠️ 临时诊断（2026-09-29 分布图加载链路排查，定位后删除）
-  bool _probeRendered = false;
 
   @override
   void initState() {
@@ -301,6 +303,8 @@ class _InspireBackdropBlurPassState extends State<_InspireBackdropBlurPass> {
     _shader?.setFloat(21, widget.colorAdjustment.shaderVibrance);
     _shader?.setFloat(22, widget.colorAdjustment.blurAdjustmentStrength);
     _shader?.setFloat(23, widget.colorAdjustment.nonBlurAdjustmentStrength);
+    // mikcb patch 5：顶角圆弧半径（逻辑 → 物理，SDF 在等比空间里算）。
+    _shader?.setFloat(24, widget.topCornerRadius * dpr);
   }
 
   @override
@@ -313,17 +317,7 @@ class _InspireBackdropBlurPassState extends State<_InspireBackdropBlurPass> {
   Widget build(BuildContext context) {
     final shader = _shader;
     if (shader == null) {
-      // ⚠️ 临时诊断（2026-09-29，定位后删除）
-      // ignore: avoid_print
-      print('inspire-probe: 模糊趟等待着色器程序');
       return widget.child ?? const SizedBox.shrink();
-    }
-    if (!_probeRendered) {
-      _probeRendered = true;
-      // ⚠️ 临时诊断（2026-09-29，定位后删除）
-      // ignore: avoid_print
-      print('inspire-probe: 模糊趟首次渲染 sigma=${widget.sigma} '
-          'area=${widget.globalBounds}');
     }
 
     return BackdropFilter(

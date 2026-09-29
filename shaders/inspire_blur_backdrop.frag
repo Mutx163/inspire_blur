@@ -46,6 +46,14 @@ uniform float u_vibrance;
 uniform float u_color_adjustment_blur_strength;
 uniform float u_color_adjustment_non_blur_strength;
 
+// --- mikcb patch 5 (2026-09-29): 顶部两角的圆弧半径（物理像素，顶向下）。
+// 0 = 关闭（旧行为：材料矩形即全形状）。> 0 时，材料矩形两个**上角**按此半径
+// 走圆弧：弧外不参与模糊采样、也不输出——宿主引擎对 BackdropFilter 的圆角
+// 裁剪不总可靠（真机实测角外出现未裁剪内容被糊开的填充），由着色器自己执行
+// 圆角形状。注意是**物理像素**（调用方传 logical × dpr），因为 SDF 必须在
+// 等比空间里算，归一化空间会把圆弧拉成椭圆。
+uniform float u_corner_radius;
+
 vec2 transformUv(vec2 uv) {
   // Move to origin
   uv -= u_transform_origin;
@@ -157,6 +165,38 @@ vec4 applyColorAdjustments(vec4 color, float blurFactor) {
   return mix(original, color, adjustmentBlend);
 }
 
+// --- mikcb patch 5: 顶角圆弧遮罩 ---
+// fragTopDown：像素/采样点的物理坐标（顶向下，与 u_area_origin 同一空间）。
+// 返回 1 = 在材料形状内（矩形 ∩ 两个上角的四分之一圆），0 = 形状外。
+// u_corner_radius <= 0 时恒返回 1（旧行为）。
+float inspireTopCornerMask(vec2 fragTopDown) {
+  if (u_corner_radius <= 0.0) {
+    return 1.0;
+  }
+
+  vec2 rel = fragTopDown - u_area_origin;
+  if (rel.x < 0.0 || rel.y < 0.0 ||
+      rel.x > u_area_size.x || rel.y > u_area_size.y) {
+    return 0.0;
+  }
+
+  vec2 tlCenter = vec2(u_corner_radius, u_corner_radius);
+  vec2 trCenter = vec2(u_area_size.x - u_corner_radius, u_corner_radius);
+  vec2 dTL = rel - tlCenter;
+  vec2 dTR = rel - trCenter;
+
+  float inTL = step(rel.x, tlCenter.x) * step(rel.y, tlCenter.y);
+  float inTR = step(trCenter.x, rel.x) * step(rel.y, trCenter.y);
+  float inCornerSquare = max(inTL, inTR);
+
+  float insideArc = max(
+      step(length(dTL), u_corner_radius) * inTL,
+      step(length(dTR), u_corner_radius) * inTR);
+
+  // 角方区之外恒 1；角方区之内按是否落在四分之一圆里判定。
+  return max(insideArc, 1.0 - inCornerSquare);
+}
+
 void main() {
   vec2 xy = FlutterFragCoord().xy;
   vec2 uv = xy / u_size;
@@ -178,6 +218,10 @@ void main() {
   areaTopLeftUV.y = tempTop;
   areaBottomRightUV.y = tempBottom;
 #endif
+
+  // mikcb patch 5: 像素的物理坐标（顶向下，与 u_area_origin 同一空间）。
+  // GLES 分支的 uv 已翻成顶向下；非 GLES 的 FlutterFragCoord 本身就是顶向下。
+  vec2 fragTopDown = uv * u_size;
 
   vec2 areaUVraw = (uv - areaTopLeftUV) / (areaBottomRightUV - areaTopLeftUV);
   vec2 areaUV = clamp(areaUVraw, vec2(0.0), vec2(1.0));
@@ -217,9 +261,10 @@ void main() {
       u_color_adjustment_non_blur_strength > 0.0 ||
       u_color_adjustment_blur_strength > 0.0
     ) {
-      frag_color = applyColorAdjustments(bg, 0.0) * insideArea;
+      frag_color = applyColorAdjustments(bg, 0.0) * insideArea
+          * inspireTopCornerMask(fragTopDown);
     } else {
-      frag_color = bg * insideArea;
+      frag_color = bg * insideArea * inspireTopCornerMask(fragTopDown);
     }
     return;
   }
@@ -259,6 +304,11 @@ void main() {
           step(areaTopLeftUV.x, uvRaw2.x) * step(uvRaw2.x, areaBottomRightUV.x) *
           step(areaTopLeftUV.y, uvRaw2.y) * step(uvRaw2.y, areaBottomRightUV.y);
 
+      // mikcb patch 5: 采样点也要过圆弧遮罩——否则圆弧内侧的像素会采到弧外
+      // 的捕获内容，把弧外的东西拖进模糊里（「模糊跨弧拖影」）。
+      float cm1 = inspireTopCornerMask(uvRaw1 * u_size);
+      float cm2 = inspireTopCornerMask(uvRaw2 * u_size);
+
       // Clamp only for safe sampling
       vec2 uv1 = clamp(uvRaw1, areaTopLeftUV, areaBottomRightUV);
       vec2 uv2 = clamp(uvRaw2, areaTopLeftUV, areaBottomRightUV);
@@ -283,5 +333,9 @@ void main() {
     frag_color = applyColorAdjustments(frag_color, blurFactor);
   }
 
-  frag_color *= insideArea;
+  // mikcb patch 5: 输出端也要过圆弧遮罩——采样遮罩只保证弧内像素不采到弧外
+  // 的内容，弧外像素本身（矩形 ∩ 弧外 = 角外的方形区）仍会按中心样本输出；
+  // 引擎对 BackdropFilter 的圆角裁剪不总可靠（真机实测），这里让弧外一律
+  // alpha=0，形状由着色器自己执行，不再赌宿主裁剪。
+  frag_color *= insideArea * inspireTopCornerMask(fragTopDown);
 }

@@ -44,6 +44,18 @@ class InspireBlurConfig {
   /// by [sigma] or [sigmaY].
   double? get effectiveSigmaY => sigma ?? sigmaY;
 
+  /// Radius of the **top** corner arcs of the effect shape (logical px).
+  ///
+  /// ## mikcb patch 5 (2026-09-29)
+  ///
+  /// 0（默认）= 材料形状就是整个部件矩形（旧行为）。大于 0 时，材料矩形两个
+  /// **上角**按此半径走圆弧：弧外不参与模糊采样、也不输出。宿主引擎对
+  /// BackdropFilter 的圆角裁剪并不总可靠（真机实测：底部弹窗顶部渐变带在有
+  /// 内容滚到带下时，效果越出面板 `ClipRRect` 的圆弧，在角外的方形区域留下
+  /// 亮色填充），形状由着色器自己执行。注意与 [distribution] 正交：它裁的是
+  /// **效果形状**（含无模糊的输出），不是模糊强度。
+  final double topCornerRadius;
+
   /// Spatial distribution of the blur effect.
   final BlurDistribution distribution;
 
@@ -66,6 +78,7 @@ class InspireBlurConfig {
   /// assertion error.
   const InspireBlurConfig({
     required this.distribution,
+    this.topCornerRadius = 0.0,
     this.transform = BlurTransform.identity,
     this.colorAdjustment = const BlurColorAdjustment(),
     this.sigma,
@@ -531,6 +544,7 @@ class InspireBlurConfig {
     double? sigmaX,
     double? sigmaY,
     BlurDistribution? distribution,
+    double? topCornerRadius,
     BlurTransform? transform,
     BlurColorAdjustment? colorAdjustment,
   }) {
@@ -539,6 +553,7 @@ class InspireBlurConfig {
       sigmaX: sigmaX ?? this.sigmaX,
       sigmaY: sigmaY ?? this.sigmaY,
       distribution: distribution ?? this.distribution,
+      topCornerRadius: topCornerRadius ?? this.topCornerRadius,
       transform: transform ?? this.transform,
       colorAdjustment: colorAdjustment ?? this.colorAdjustment,
     );
@@ -551,6 +566,7 @@ class InspireBlurConfig {
       sigmaY: null,
       sigma: null,
       distribution: distribution,
+      topCornerRadius: topCornerRadius,
       transform: transform,
       colorAdjustment: colorAdjustment,
     );
@@ -563,6 +579,7 @@ class InspireBlurConfig {
       sigmaY: sigma,
       sigma: null,
       distribution: distribution,
+      topCornerRadius: topCornerRadius,
       transform: transform,
       colorAdjustment: colorAdjustment,
     );
@@ -577,6 +594,7 @@ class InspireBlurConfig {
         other.sigmaX == sigmaX &&
         other.sigmaY == sigmaY &&
         other.distribution == distribution &&
+        other.topCornerRadius == topCornerRadius &&
         other.transform == transform &&
         other.colorAdjustment == colorAdjustment;
   }
@@ -587,6 +605,7 @@ class InspireBlurConfig {
         sigmaX,
         sigmaY,
         distribution,
+        topCornerRadius,
         transform,
         colorAdjustment,
       );
